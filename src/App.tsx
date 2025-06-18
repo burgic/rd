@@ -8,6 +8,7 @@ import ResetPassword from './components/Auth/ResetPassword';
 import CompanyDescriptionForm from './components/RDAssessment/CompanyDescriptionForm';
 import AssessmentResults from './components/RDAssessment/AssessmentResults';
 import AssessmentHistory from './components/RDAssessment/AssessmentHistory';
+import AssessmentViewer from './components/RDAssessment/AssessmentViewer';
 import Navbar from './components/Navbar';
 import AdviserDashboard from './components/Adviser/Dashboard';
 import Insights from './components/Adviser/Insights';
@@ -66,6 +67,14 @@ import { Toaster } from 'react-hot-toast';
               element={
                 <ProtectedRoute requiredRole="client">
                   <AssessmentHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/rd-assessment/:assessmentId" 
+              element={
+                <ProtectedRoute requiredRole="client">
+                  <AssessmentViewer />
                 </ProtectedRoute>
               } 
             />

@@ -125,6 +125,17 @@ const AssessmentHistory: React.FC = () => {
               </div>
             )}
 
+            {assessments.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6">
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm">Click on any assessment to view full details and recommendations</span>
+                </div>
+              </div>
+            )}
+
             {assessments.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 mb-4">
@@ -144,11 +155,15 @@ const AssessmentHistory: React.FC = () => {
             ) : (
               <div className="space-y-6">
                 {assessments.map((assessment) => (
-                  <div key={assessment.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div 
+                    key={assessment.id} 
+                    className="group border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-pointer"
+                    onClick={() => navigate(`/rd-assessment/${assessment.id}`)}
+                  >
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-700 transition-colors">
                             {assessment.company_name}
                           </h3>
                           <p className="text-sm text-gray-500">
@@ -159,6 +174,9 @@ const AssessmentHistory: React.FC = () => {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
+                          </p>
+                          <p className="text-xs text-blue-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to view full assessment details
                           </p>
                         </div>
                         <div className="flex items-center space-x-4">
@@ -175,7 +193,10 @@ const AssessmentHistory: React.FC = () => {
                             {assessment.eligible ? 'Eligible' : 'Not Eligible'}
                           </div>
                           <button
-                            onClick={() => setDeleteConfirm(assessment.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm(assessment.id);
+                            }}
                             className="text-red-600 hover:text-red-800 p-1"
                             title="Delete assessment"
                           >
@@ -212,15 +233,27 @@ const AssessmentHistory: React.FC = () => {
 
                       <div className="mt-4 flex space-x-4">
                         <button
-                          onClick={() => navigate('/rd-assessment', {
-                            state: {
-                              companyName: assessment.company_name,
-                              companyDescription: assessment.company_description
-                            }
-                          })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/rd-assessment', {
+                              state: {
+                                companyName: assessment.company_name,
+                                companyDescription: assessment.company_description
+                              }
+                            });
+                          }}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                           Re-assess →
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/rd-assessment/${assessment.id}`);
+                          }}
+                          className="text-green-600 hover:text-green-800 text-sm font-medium"
+                        >
+                          View Details →
                         </button>
                       </div>
                     </div>
