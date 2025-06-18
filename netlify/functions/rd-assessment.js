@@ -8,12 +8,27 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const rateLimitMap = new Map();
 
-exports.handler = async (event, context) => {
-  // Only allow POST requests
+exports.handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
+
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 204,
+      headers
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
+      headers,
+      body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
 
@@ -23,6 +38,7 @@ exports.handler = async (event, context) => {
     if (!userId || !query || !companyName || !companyDescription) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ 
           error: 'Missing required fields: userId, query, companyName, companyDescription' 
         }),
@@ -38,6 +54,7 @@ exports.handler = async (event, context) => {
         if (requestCount >= 3) { // Limit to 3 R&D assessments per minute
           return {
             statusCode: 429,
+            headers,
             body: JSON.stringify({ 
               error: 'Rate limit exceeded. Please wait a minute before submitting another assessment.' 
             }),
@@ -62,6 +79,7 @@ exports.handler = async (event, context) => {
       console.error('Error fetching user profile:', profileError);
       return {
         statusCode: 401,
+        headers,
         body: JSON.stringify({ error: 'Unauthorized: Invalid user ID' }),
       };
     }
@@ -71,12 +89,7 @@ exports.handler = async (event, context) => {
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST',
-      },
+      headers,
       body: JSON.stringify({ 
         response: aiResponse,
         companyName,
@@ -88,6 +101,7 @@ exports.handler = async (event, context) => {
     console.error('Error processing R&D assessment request:', error);
     return {
       statusCode: 500,
+      headers,
       body: JSON.stringify({ 
         error: 'Failed to process R&D assessment. Please try again.' 
       }),

@@ -50,8 +50,8 @@ const AssessmentResults: React.FC = () => {
       // Create the R&D assessment prompt
       const prompt = createRDAssessmentPrompt(assessmentData);
 
-      // Call the existing chatbot function
-      const response = await fetch('/api/rd-assessment', {
+      // Call the R&D assessment function
+      const response = await fetch('/.netlify/functions/rd-assessment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
