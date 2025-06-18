@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import { supabase } from '../../services/supabaseClient';
@@ -25,6 +25,7 @@ const AssessmentResults: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const hasRequestedRef = useRef(false);
 
   const assessmentData = location.state as AssessmentData;
 
@@ -39,8 +40,12 @@ const AssessmentResults: React.FC = () => {
       return;
     }
 
-    assessRDEligibility();
-  }, [assessmentData, user, navigate]);
+    // Only call if we haven't already made a request and aren't currently loading
+    if (!hasRequestedRef.current && !result && !error) {
+      hasRequestedRef.current = true;
+      assessRDEligibility();
+    }
+  }, [assessmentData, user]); // Removed navigate from dependencies to prevent re-renders
 
   const assessRDEligibility = async () => {
     try {
@@ -66,6 +71,9 @@ const AssessmentResults: React.FC = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please wait a minute before submitting another assessment.');
+        }
         throw new Error('Failed to assess R&D eligibility');
       }
 
@@ -80,7 +88,8 @@ const AssessmentResults: React.FC = () => {
 
     } catch (error: any) {
       console.error('R&D Assessment error:', error);
-      setError('Failed to assess R&D eligibility. Please try again.');
+      setError(error.message || 'Failed to assess R&D eligibility. Please try again.');
+      hasRequestedRef.current = false; // Reset flag on error to allow retry
     } finally {
       setLoading(false);
     }
@@ -213,12 +222,23 @@ Base your assessment on current HMRC guidelines and provide practical, actionabl
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Assessment Failed</h2>
             <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={() => navigate('/rd-form')}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-            >
-              Try Again
-            </button>
+            <div className="space-y-3">
+              {error?.includes('Rate limit') ? (
+                <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+                  Please wait a minute before trying again. This helps us maintain service quality for all users.
+                </div>
+              ) : null}
+              <button
+                onClick={() => {
+                  hasRequestedRef.current = false;
+                  setError(null);
+                  navigate('/rd-form');
+                }}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         </div>
       </div>
