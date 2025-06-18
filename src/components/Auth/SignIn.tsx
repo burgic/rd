@@ -21,22 +21,27 @@ const SignIn: React.FC = () => {
       setError(location.state.message);
       setResetSent(true);
       // Clear the state to prevent the message from persisting
-      navigate(location.pathname, { replace: true });
+      const newState = { ...location.state };
+      delete newState.message;
+      navigate(location.pathname, { replace: true, state: newState });
     }
-  }, [location, navigate]);
+  }, [location.state, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    // setShowResendButton(false);
 
     try {
+      console.log('Starting sign in process...');
+      
       // Attempt sign in first
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      console.log('Sign in response:', { data, error: signInError });
 
       if (signInError) {
         console.error('Sign in error:', signInError);
@@ -53,6 +58,8 @@ const SignIn: React.FC = () => {
         throw new Error('Sign in successful but no user data returned');
       }
 
+      console.log('User signed in successfully:', data.user);
+
       // After successful sign in, get the user's profile
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -60,13 +67,18 @@ const SignIn: React.FC = () => {
         .eq('id', data.user.id)
         .maybeSingle();
 
+      console.log('Profile lookup result:', { profile, profileError });
+
       if (profileError) {
         console.error('Profile check error:', profileError);
         // If profile doesn't exist, use metadata role or default to client
         const userRole = data.user.user_metadata?.role || 'client';
+        console.log('Using metadata role:', userRole);
         if (userRole === 'adviser') {
+          console.log('Navigating to adviser dashboard');
           navigate('/adviser/adviser-dashboard');
         } else {
+          console.log('Navigating to client dashboard');
           navigate('/client/client-dashboard');
         }
         return;
@@ -74,10 +86,13 @@ const SignIn: React.FC = () => {
 
       // Get role from profile or user metadata
       const userRole = profile?.role || data.user.user_metadata?.role || 'client';
+      console.log('Final user role determined:', userRole);
 
       if (userRole === 'adviser') {
+        console.log('Navigating to adviser dashboard');
         navigate('/adviser/adviser-dashboard');
       } else {
+        console.log('Navigating to client dashboard');
         navigate('/client/client-dashboard');
       }
 
