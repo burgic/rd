@@ -1,0 +1,584 @@
+
+/*
+import { HandlerEvent } from "@netlify/functions";
+
+const { Handler } = require('@netlify/functions');
+const OpenAI = require('openai');
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const handler = async (event: HandlerEvent) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+  }
+
+  try {
+    const { message, financialData } = JSON.parse(event.body || '{}');
+    
+    const summary = `
+      Annual Income: £${financialData.incomes[0].amount}
+      Monthly Expenses: £${financialData.expenditures.reduce((sum, e) => sum + e.amount, 0)}
+      Total Assets: £${financialData.assets[0].value}
+      Total Liabilities: £${financialData.liabilities[0].amount}
+    `;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: `You are a financial advisor. Client data:\n${summary}` },
+        { role: "user", content: message }
+      ]
+    });
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ response: completion.choices[0].message.content })
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: String(error) })
+    };
+  }
+};
+
+module.exports = { handler };
+
+
+// netlify/functions/chatbot.ts
+
+import { Handler, HandlerEvent } from '@netlify/functions';
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import { Goal, Expenditure, FinancialData, Income, Asset, Liability, RequestBody } from './types/financial';
+
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+  }
+
+  try {
+    const { message, financialData } = JSON.parse(event.body || '{}') as RequestBody;
+
+    const monthlyIncome = data.incomes.reduce((sum, income) => sum + income.amount, 0) / 12;
+      const totalMonthlyExpenses = data.expenditures.reduce((sum: number, exp: Expenditure) => sum + exp.amount, 0);
+      const totalAssets = data.assets.reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
+      const totalLiabilities = data.liabilities.reduce((sum, liability) => sum + (Number(liability.amount) || 0), 0);
+      const netWorth = totalAssets - totalLiabilities;
+
+    const summary = `
+      Annual Income: £${financialData.incomes}
+      Assets: £${financialData.assets}
+      Liabilities: £${financialData.liabilities}
+      Monthly Expenses: ${financialData.expenditures.map((e: Expenditure) => `${e.category}: £${e.amount}`).join(', ')}
+      Goals: ${financialData.goals.map((g: Goal) => `${g.goal}: £${g.target_amount} in ${g.time_horizon} years`).join(', ')}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: `You are a financial advisor. Here's the client's data:\n${summary}` },
+        { role: "user", content: message }
+      ]
+    });
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      },
+      body: JSON.stringify({ response: completion.choices[0].message.content })
+    };
+
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Server error' })
+    };
+  }
+};
+
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_DATABASE_URL!,
+  process.env.REACT_APP_SUPABASE_ANON_KEY!
+);
+
+
+
+export const handler: Handler = async (event: HandlerEvent) => {
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    const { userId, message, financialData, messageHistory = [] } = JSON.parse(event.body || '{}');
+
+    if (!userId || !message || !financialData) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing userId or message' })
+      };
+    }
+
+    const createFinancialSummary = (data: FinancialData): string => {
+      const monthlyIncome = data.incomes.reduce((sum, income) => sum + income.amount, 0) / 12;
+      const totalMonthlyExpenses = data.expenditures.reduce((sum: number, exp: Expenditure) => sum + exp.amount, 0);
+      const totalAssets = data.assets.reduce((sum, asset) => sum + (Number(asset.value) || 0), 0);
+      const totalLiabilities = data.liabilities.reduce((sum, liability) => sum + (Number(liability.amount) || 0), 0);
+      const netWorth = totalAssets - totalLiabilities;
+
+      return `
+    Financial Overview:
+    - Annual Income: £${data.incomes.toLocaleString()}
+    - Monthly Income: £${monthlyIncome.toLocaleString()}
+    - Monthly Expenses: £${totalMonthlyExpenses.toLocaleString()}
+    - Total Assets: £${data.assets.toLocaleString()}
+    - Total Liabilities: £${data.liabilities.toLocaleString()}
+    - Net Worth: £${netWorth.toLocaleString()}
+    
+    Monthly Expenses Breakdown:
+    ${data.expenditures.map((exp: Expenditure) => `- ${exp.category}: £${exp.amount.toLocaleString()}`).join('\n')}
+    
+    Financial Goals:
+    ${data.goals.map((goal: Goal) => `- ${goal.goal}: Target £${goal.target_amount.toLocaleString()} in ${goal.time_horizon} years`).join('\n')}
+    `;
+    };
+    
+
+
+
+    const financialSummary = createFinancialSummary
+
+
+    console.log('Sending the following data to OpenAI API:');
+    console.log('Summary:', financialSummary);
+    console.log('User Message:', message);
+
+          const completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: `You are a financial advisor assistant. Use this data to provide specific advice:\n${financialSummary}`
+            },
+            { role: "user", content: message }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+          });
+
+          return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Methods': 'POST'
+          },
+          body: JSON.stringify({
+            response: completion.choices[0].message.content
+          })
+          };
+
+          } catch (error) {
+          console.error('Error:', error);
+          return {
+          statusCode: 500,
+          body: JSON.stringify({ 
+            error: 'Server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          })
+        };
+      }
+    };
+
+
+    
+// Format financial summary
+const summary = `
+Financial Overview:
+Annual Income: £${financialData.income}
+Monthly Income: £${financialData.income / 12}
+Assets: £${financialData.assets}
+Liabilities: £${financialData.liabilities}
+Net Worth: £${financialData.assets - financialData.liabilities}
+
+Monthly Expenses:
+${financialData.expenditure.map((exp: Expenditure) => 
+  `- ${exp.category}: £${exp.amount}`
+).join('\n')}
+
+Financial Goals:
+${financialData.goals.map((goal: Goal) => 
+  `- ${goal.goal}: £${goal.target_amount} in ${goal.time_horizon} years`
+).join('\n')}
+`;
+
+
+
+// netlify/functions/chatbot.ts
+
+import { Handler, HandlerEvent } from '@netlify/functions';
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import { FinancialData } from './types/financial';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_DATABASE_URL!,
+  process.env.REACT_APP_SUPABASE_ANON_KEY!
+);
+
+interface RequestBody {
+  message: string;
+  userId: string;
+  financialData: FinancialData;
+  messageHistory?: ChatCompletionMessageParam[];
+}
+
+const createFinancialSummary = (data: FinancialData): string => {
+  console.log('Incoming financial data:', JSON.stringify(data, null, 2));
+
+  if (!data || typeof data !== 'object') {
+    console.error('Invalid financial data received:', data);
+    return 'Error: Invalid financial data format';
+  }
+
+  // Ensure arrays exist
+  const incomes = Array.isArray(data.incomes) ? data.incomes : [];
+  const expenditures = Array.isArray(data.expenditures) ? data.expenditures : [];
+  const assets = Array.isArray(data.assets) ? data.assets : [];
+  const liabilities = Array.isArray(data.liabilities) ? data.liabilities : [];
+  const goals = Array.isArray(data.goals) ? data.goals : [];
+
+  const arrays = {
+    incomes: Array.isArray(data.incomes),
+    expenditures: Array.isArray(data.expenditures),
+    assets: Array.isArray(data.assets),
+    liabilities: Array.isArray(data.liabilities),
+    goals: Array.isArray(data.goals)
+  };
+  
+  console.log('Array validation:', arrays);
+
+  const processed = {
+    incomes: arrays.incomes ? data.incomes : [],
+    expenditures: arrays.expenditures ? data.expenditures : [],
+    assets: arrays.assets ? data.assets : [],
+    liabilities: arrays.liabilities ? data.liabilities : [],
+    goals: arrays.goals ? data.goals : []
+  };
+
+  console.log('Processed arrays:', {
+    incomesCount: processed.incomes.length,
+    expendituresCount: processed.expenditures.length,
+    assetsCount: processed.assets.length,
+    liabilitiesCount: processed.liabilities.length,
+    goalsCount: processed.goals.length
+  });
+
+   // Safely calculate totals
+   const totalAnnualIncome = data.incomes.reduce((sum, inc) => 
+    sum + (Number(inc.amount) || 0), 0);
+  
+  const monthlyIncome = totalAnnualIncome / 12;
+  
+  const totalMonthlyExpenses = data.expenditures.reduce((sum, exp) => 
+    sum + (Number(exp.amount) || 0), 0);
+  
+  const totalAssets = data.assets.reduce((sum, asset) => 
+    sum + (Number(asset.value) || 0), 0);
+  
+  const totalLiabilities = data.liabilities.reduce((sum, liability) => 
+    sum + (Number(liability.amount) || 0), 0);
+  
+  const netWorth = totalAssets - totalLiabilities;
+
+    // Log the calculated values
+    console.log('Calculated values:', {
+      totalAnnualIncome,
+      monthlyIncome,
+      totalMonthlyExpenses,
+      totalAssets,
+      totalLiabilities,
+      netWorth
+    });
+
+  if (!data.incomes || !data.incomes.length) {
+    console.log('No income data available');
+    return 'No income data available';
+  }
+
+
+  return `
+FINANCIAL OVERVIEW
+=================
+
+Annual Income: £${totalAnnualIncome.toLocaleString()}
+Monthly Income: £${monthlyIncome.toLocaleString()}
+Monthly Expenses: £${totalMonthlyExpenses.toLocaleString()}
+Total Assets: £${totalAssets.toLocaleString()}
+Total Liabilities: £${totalLiabilities.toLocaleString()}
+Net Worth: £${netWorth.toLocaleString()}
+
+DETAILED BREAKDOWN
+=================
+Income Sources:
+${data.incomes.length > 0 
+  ? data.incomes.map((inc) => `- ${inc.type}: £${inc.amount} (${inc.frequency})`).join('\n') 
+  : 'No income data available'}
+
+Monthly Expenses:
+${data.expenditures.length > 0 
+  ? data.expenditures.map((exp) => `- ${exp.category}: £${exp.amount}`).join('\n') 
+  : 'No expense data available'}
+
+Assets:
+${data.assets.length > 0 
+  ? data.assets.map((asset) => `- ${asset.type}: £${asset.value} - ${asset.description}`).join('\n') 
+  : 'No asset data available'}
+
+Liabilities:
+${data.liabilities.length > 0 
+  ? data.liabilities.map((liability) => `- ${liability.type}: £${liability.amount} at ${liability.interest_rate}% interest`).join('\n') 
+  : 'No liability data available'}
+
+Financial Goals:
+${data.goals.length > 0 
+  ? data.goals.map((goal) => `- ${goal.goal}: Target £${goal.target_amount} in ${goal.time_horizon} years`).join('\n') 
+  : 'No goals set'}
+
+Note: All monetary values are in GBP.
+`;
+
+
+};
+
+
+    const createSystemPrompt = (financialSummary: string): string => {
+        const systemPrompt = `You are a financial advisor assistant with access to the user's current financial data. 
+      Please use this data to provide specific, actionable advice:
+      
+      ${financialSummary}
+      
+      When responding:
+      1. Reference specific numbers from their financial data
+      2. Make recommendations based on their actual situation
+      3. Consider their income, expenses, assets, liabilities, and stated goals
+      4. Provide practical, actionable advice
+      5. Keep responses clear and data-driven
+
+      Please provide specific, actionable advice based on these exact numbers and circumstances.`;
+
+        console.log('System prompt:', systemPrompt);
+        return systemPrompt;
+    };
+
+
+  export const handler: Handler = async (event: HandlerEvent) => {
+    // Ensure the method is POST
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ error: 'Method not allowed' }),
+      };
+    }
+
+    console.log('Handler function started');
+  
+    let clientFinancialData: FinancialData;
+    let message: string;
+    let messageHistory: ChatCompletionMessageParam[] = [];
+  
+    try {
+      console.log('Raw event body:', event.body);
+    
+      const parsedBody = JSON.parse(event.body || '{}');
+      console.log('Parsed body:', JSON.stringify(parsedBody, null, 2));
+      // Parse and validate request body
+      const { message: parsedMessage, userId, financialData, messageHistory: parsedMessageHistory = [] } = JSON.parse(event.body || '{}') as RequestBody;
+  
+      if (!parsedMessage || !userId || !financialData) {
+        throw new Error('Missing required fields in request body');
+      }
+
+      message = parsedMessage; // Assign parsed message
+      messageHistory = parsedMessageHistory; // Assign parsed message history
+      clientFinancialData = financialData;
+
+      // Log each piece of data separately
+        console.log('Financial Data Received:', {
+          hasMessage: Boolean(message),
+        hasUserId: Boolean(userId),
+        financialDataExists: Boolean(financialData),
+        financialDataStructure: financialData ? {
+        hasIncomes: Array.isArray(financialData.incomes),
+        incomesLength: financialData.incomes?.length,
+        firstIncome: financialData.incomes?.[0],
+        hasExpenditures: Array.isArray(financialData.expenditures),
+        expendituresLength: financialData.expenditures?.length,
+        firstExpenditure: financialData.expenditures?.[0],
+          } : null
+        });
+
+      console.log('Received financial data:', JSON.stringify(clientFinancialData, null, 2));
+    } catch (error) {
+      console.error('Error parsing event.body:', error);
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'Failed to parse request body',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }),
+      };
+    }
+  
+    // Validate the financial data structure
+    const dataValidation = {
+      hasIncomes: Array.isArray(clientFinancialData?.incomes) && clientFinancialData.incomes.length > 0,
+      hasExpenditures: Array.isArray(clientFinancialData?.expenditures) && clientFinancialData.expenditures.length > 0,
+      hasAssets: Array.isArray(clientFinancialData?.assets) && clientFinancialData.assets.length > 0,
+      hasLiabilities: Array.isArray(clientFinancialData?.liabilities) && clientFinancialData.liabilities.length > 0,
+      hasGoals: Array.isArray(clientFinancialData?.goals) && clientFinancialData.goals.length > 0,
+    };
+  
+    console.log('Data validation results:', dataValidation);
+  
+    if (!dataValidation.hasIncomes && !dataValidation.hasExpenditures && !dataValidation.hasAssets && !dataValidation.hasLiabilities && !dataValidation.hasGoals) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'No financial data provided',
+          debug: dataValidation,
+        }),
+      };
+    }
+
+    const validateFinancialData = (data: FinancialData): boolean => {
+        if (typeof data !== 'object' || data === null) {
+            console.error('Invalid financial data: not an object');
+            return false;
+        }
+
+        const requiredKeys = ['incomes', 'expenditures', 'assets', 'liabilities', 'goals'] as const;
+        for (const key of requiredKeys) {
+            if (!Array.isArray(data[key])) {
+                console.error(`Invalid financial data: ${key} is not an array`);
+                return false;
+            }
+        }
+
+        return true;
+    };
+  
+    // Before sending the data to OpenAI
+    if (!validateFinancialData(clientFinancialData)) {
+        return {
+            statusCode: 400,
+            body: JSON.stringify({
+                error: 'Invalid financial data structure',
+            }),
+        };
+    }
+  
+    try {
+      // Generate financial summary and system prompt
+      const financialSummary = createFinancialSummary(clientFinancialData);
+      console.log('Generated financial summary:', financialSummary);
+  
+      // const systemPrompt = createSystemPrompt(financialSummary);
+      console.log('Financial Summary being sent to OpenAI:', financialSummary);
+      console.log('Message history:', messageHistory);
+      console.log('User message:', message);
+      // Interact with OpenAI
+      
+      let completion
+
+      try {
+        completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: createSystemPrompt(financialSummary) },
+            ...messageHistory,
+            { role: 'user', content: message },
+          ],
+          temperature: 0.7,
+          max_tokens: 150,
+        });
+            console.log('OpenAI API response:', JSON.stringify(completion, null, 2));
+
+            if (completion.choices && completion.choices.length > 0) {
+              const responseMessage = completion.choices[0].message.content;
+              console.log('Response message:', responseMessage);
+          } else {
+              console.error('No choices found in the response.');
+          }
+
+        } catch (error) {
+            console.error('Error calling OpenAI API:', error);
+            // Handle the error appropriately, e.g., set a default response or return an error message
+            return {
+                statusCode: 500,
+                body: JSON.stringify({
+                    error: 'Failed to get a response from OpenAI',
+                    details: error instanceof Error ? error.message : 'Unknown error',
+                }),
+            };
+        }
+  
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'POST',
+        },
+        body: JSON.stringify({
+          success: true,
+          response: completion.choices[0].message.content,
+          debug: { hasIncomes: clientFinancialData.incomes?.length > 0,
+            incomesCount: clientFinancialData.incomes?.length,
+            expendituresCount: clientFinancialData.expenditures?.length,
+            assetsCount: clientFinancialData.assets?.length,
+            liabilitiesCount: clientFinancialData.liabilities?.length,
+            goalsCount: clientFinancialData.goals?.length },
+        }),
+      };
+    } catch (error) {
+      console.error('Handler error:', error);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: 'Server error',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }),
+      };
+    }
+  };
+
+*/

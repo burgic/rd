@@ -1,0 +1,226 @@
+-- Supabase AI is experimental and may produce incorrect answers
+-- Always verify the output before executing
+
+-- Enable the pgcrypto extension for UUID generation
+create extension if not exists "pgcrypto";
+
+-- First drop child tables (those with foreign key references)
+DROP TABLE IF EXISTS public.goals;
+DROP TABLE IF EXISTS public.liabilities;
+DROP TABLE IF EXISTS public.assets;
+DROP TABLE IF EXISTS public.expenditures;
+DROP TABLE IF EXISTS public.incomes;
+-- Drop the parent table last since other tables reference it
+DROP TABLE IF EXISTS public.profiles;
+
+
+
+-- Create the profiles table
+create table if not exists
+  public.profiles (
+    id uuid primary key references auth.users (id) on delete cascade,
+    name text,
+    email text unique,
+    role text check (role in ('adviser', 'client')),
+    adviser_id uuid references public.profiles (id),
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Drop the existing incomes table if it exists
+drop table if exists public.incomes;
+
+-- Create the incomes table
+create table
+  public.incomes (
+    id uuid primary key default gen_random_uuid (),
+    client_id uuid references public.profiles (id) on delete cascade,
+    type text,
+    amount numeric,
+    frequency text,
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Create the expenditures table
+create table
+  public.expenditures (
+    id uuid primary key default gen_random_uuid (),
+    client_id uuid references public.profiles (id) on delete cascade,
+    category text,
+    amount numeric,
+    frequency text,
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Create the assets table
+create table
+  public.assets (
+    id uuid primary key default gen_random_uuid (),
+    client_id uuid references public.profiles (id) on delete cascade,
+    type text,
+    description text,
+    value numeric,
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Create the liabilities table
+create table
+  public.liabilities (
+    id uuid primary key default gen_random_uuid (),
+    client_id uuid references public.profiles (id) on delete cascade,
+    type text,
+    description text,
+    amount numeric,
+    interest_rate numeric,
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Create the goals table
+create table
+  public.goals (
+    id uuid primary key default gen_random_uuid (),
+    client_id uuid references public.profiles (id) on delete cascade,
+    goal text,
+    target_amount numeric,
+    time_horizon integer, -- in months or years
+    created_at timestamp with time zone default timezone ('utc', now())
+  );
+
+-- Enable RLS on all tables
+alter table public.profiles enable row level security;
+
+alter table public.incomes enable row level security;
+
+alter table public.expenditures enable row level security;
+
+alter table public.assets enable row level security;
+
+alter table public.liabilities enable row level security;
+
+alter table public.goals enable row level security;
+
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+
+-- Drop ALL existing policies for profiles
+DROP POLICY IF EXISTS "Allow users to select their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Advisers can select their clients' profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to insert their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Allow reading adviser profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow users to read own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Allow profile creation" ON public.profiles;
+
+-- Re-enable RLS
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Create the only policies we need
+CREATE POLICY "Allow reading adviser profiles"
+ON public.profiles
+FOR SELECT
+USING (role = 'adviser');
+
+CREATE POLICY "Allow users to read own profile"
+ON public.profiles
+FOR SELECT
+USING (id = auth.uid());
+
+CREATE POLICY "Allow profile creation"
+ON public.profiles
+FOR INSERT
+WITH CHECK (true);  -- Allow any insert during signup
+
+CREATE POLICY "Allow users to update own profile"
+ON public.profiles
+FOR UPDATE
+USING (id = auth.uid());
+
+
+-- RLS Policies for profiles table
+
+
+
+-- RLS Policies for incomes table
+-- Clients can manage their own data
+create policy "Clients can manage their own data" on public.incomes for all using (client_id = auth.uid ());
+
+-- Advisers can access their clients' data
+create policy "Advisers can access their clients' data" on public.incomes for all using (
+  exists (
+    select
+      1
+    from
+      profiles
+    where
+      profiles.id = incomes.client_id
+      and profiles.adviser_id = auth.uid ()
+      and (
+        select
+          role
+        from
+          profiles
+        where
+          id = auth.uid ()
+      ) = 'adviser'
+  )
+);
+
+-- Repeat the above policies for expenditures, assets, liabilities, and goals tables
+-- Replace {table_name} with expenditures, assets, liabilities, goals
+-- For expenditures table
+create policy "Clients can manage their own data" on public.expenditures for all using (client_id = auth.uid ());
+
+create policy "Advisers can access their clients' data" on public.expenditures for all using (
+  exists (
+    select
+      1
+    from
+      public.profiles as client_profile
+    where
+      client_profile.id = client_id
+      and client_profile.adviser_id = auth.uid ()
+  )
+);
+
+-- For assets table
+create policy "Clients can manage their own data" on public.assets for all using (client_id = auth.uid ());
+
+create policy "Advisers can access their clients' data" on public.assets for all using (
+  exists (
+    select
+      1
+    from
+      public.profiles as client_profile
+    where
+      client_profile.id = client_id
+      and client_profile.adviser_id = auth.uid ()
+  )
+);
+
+-- For liabilities table
+create policy "Clients can manage their own data" on public.liabilities for all using (client_id = auth.uid ());
+
+create policy "Advisers can access their clients' data" on public.liabilities for all using (
+  exists (
+    select
+      1
+    from
+      public.profiles as client_profile
+    where
+      client_profile.id = client_id
+      and client_profile.adviser_id = auth.uid ()
+  )
+);
+
+-- For goals table
+create policy "Clients can manage their own data" on public.goals for all using (client_id = auth.uid ());
+
+create policy "Advisers can access their clients' data" on public.goals for all using (
+  exists (
+    select
+      1
+    from
+      public.profiles as client_profile
+    where
+      client_profile.id = client_id
+      and client_profile.adviser_id = auth.uid ()
+  )
+);
