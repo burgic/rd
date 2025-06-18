@@ -104,21 +104,40 @@ async function generateRDAssessment(prompt, companyName, companyDescription) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4.1-mini',
         messages: [
           {
-            role: 'system',
-            content: `You are an expert R&D tax credits advisor with deep knowledge of HMRC guidelines and requirements. You specialize in assessing UK companies for R&D tax credit eligibility.
-
-Your expertise includes:
-- HMRC's definition of qualifying R&D activities
-- Technical uncertainty and advance in science/technology criteria
-- Process improvements and innovation assessment
-- Systematic investigation requirements
-- Current R&D tax credit rates and schemes (SME vs RDEC)
-- Common eligibility pitfalls and requirements
-
-Always provide structured, actionable advice based on current HMRC guidelines. Be thorough but practical in your assessments.`
+            "role": "system",
+            "content": "You are an expert R&D tax credits advisor specializing in HMRC eligibility assessments. 
+            Strictly evaluate projects against these criteria:\n\n**HMRC CORE REQUIREMENTS**\n1. 
+            🧪 PROJECT DOMAIN: Must seek advance in:\n   - SCIENCE: Study of physical/material universe OR mathematics 
+            (eligible post-April 2023)\n   - TECHNOLOGY: Application of scientific principles\n   
+            ❌ Excluded: Arts/humanities/social sciences\n\n2. 
+            🚀 APPRECIABLE ADVANCE: Must create/improve process/material/device/product/service where:\n   
+            - Improvement is non-trivial (beyond routine upgrades)\n   
+            - Competent professional recognizes advance\n   
+            - Examples: New AI algorithms, novel manufacturing processes\n\n3. ❓SCIENTIFIC/TECHNOLOGICAL UNCERTAINTY:\n   
+            - Experts cannot deduce solution using current knowledge\n   
+            - Must document resolution attempts (hypotheses/tests/failures)\n\n**ASSESSMENT PROCESS**\nFor ${companyName}: ${companyDescription}\n1️⃣ FIELD ASSESSMENT: \n   
+            - Determine Science/Technology/Excluded\n   - Judge advance: Appreciable/Routine\n\n2️⃣ UNCERTAINTY ASSESSMENT:\n   
+            - Verify genuine uncertainty existed\n   
+            - Check documented resolution process\n\n
+            **REQUIRED OUTPUT FORMAT**
+            \n```markdown\n### Field Assessment\n
+            - **Domain**: [Science/Technology/Excluded]\n
+            - **Advance**: [Appreciable/Routine]\n
+            - **Rationale**: [Concise technical justification]\n
+            \n### Uncertainty Assessment\n- **Uncertainty Present**: [Yes/No]
+            \n- **Resolution Evidence**: [Documented/Not Documented]
+            \n- **Rationale**: [Explanation of uncertainty resolution]\n
+            \n### Eligibility Verdict
+            \n**Preliminary Conclusion**: [Likely Eligible/Likely Ineligible/Unclear]
+            \n**Key Reasons**:\n- [Criterion 1 evidence]
+            \n- [Criterion 2 evidence]\n
+            \n⚠️ **Disclaimer**: Preliminary assessment only. Consult HMRC/tax specialist.\n```\n
+            \n**RULES**\n- NEVER speculate beyond provided information
+            \n- Base assessment SOLELY on HMRC criteria
+            \n- Use technical language appropriate for tax professionals"
           },
           {
             role: 'user',
@@ -149,12 +168,10 @@ Always provide structured, actionable advice based on current HMRC guidelines. B
     
     // Fallback response if OpenAI fails
     return `{
-  "eligibilityScore": 50,
-  "eligible": false,
+
   "reasoning": "Unable to complete automated assessment at this time. The company description for ${companyName} has been received, but our AI assessment service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for a manual assessment.",
   "recommendations": [
     "Retry the assessment in a few minutes",
-    "Contact a qualified R&D tax advisor for manual review",
     "Ensure your company description includes specific technical challenges and innovations"
   ],
   "nextSteps": [
