@@ -19,33 +19,14 @@ const SignIn: React.FC = () => {
     // setShowResendButton(false);
 
     try {
-      // First try to get the user's profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('email', email)
-        .single()
-        .throwOnError();
-
-      if (profileError && !profileError.message.includes('no rows')) {
-        console.error('Profile check error:', profileError);
-      }
-
-      // Attempt sign in
+      // Attempt sign in first
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
-
         console.error('Sign in error:', signInError);
-/*
-        if (signInError.message.includes('Email not confirmed')) {
-          setShowResendButton(true);
-          throw new Error('Please confirm your email address. Check your inbox for a confirmation link.');
-        }
-*/
         if (signInError.message.includes('Invalid login credentials')) {
           throw new Error('Invalid email or password');
         }
@@ -59,8 +40,27 @@ const SignIn: React.FC = () => {
         throw new Error('Sign in successful but no user data returned');
       }
 
-      // Get role from either profile or user metadata
-      const userRole = profile?.role || data.user.user_metadata?.role;
+      // After successful sign in, get the user's profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Profile check error:', profileError);
+        // If profile doesn't exist, use metadata role or default to client
+        const userRole = data.user.user_metadata?.role || 'client';
+        if (userRole === 'adviser') {
+          navigate('/adviser/adviser-dashboard');
+        } else {
+          navigate('/client/client-dashboard');
+        }
+        return;
+      }
+
+      // Get role from profile or user metadata
+      const userRole = profile?.role || data.user.user_metadata?.role || 'client';
 
       if (userRole === 'adviser') {
         navigate('/adviser/adviser-dashboard');
@@ -162,7 +162,27 @@ return (
         </div>
       </form>
 
-      <div className="mt-6 text-center">
+      <div className="mt-6 text-center space-y-2">
+        <p className="text-sm text-gray-600">
+          <button
+            type="button"
+            onClick={async () => {
+              if (email) {
+                const { error } = await supabase.auth.resetPasswordForEmail(email);
+                if (error) {
+                  setError('Failed to send reset email');
+                } else {
+                  setError('Password reset email sent! Check your inbox.');
+                }
+              } else {
+                setError('Please enter your email first');
+              }
+            }}
+            className="font-medium text-blue-600 hover:text-blue-500"
+          >
+            Forgot password?
+          </button>
+        </p>
         <p className="text-sm text-gray-600">
           Don't have an account?{' '}
           <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
