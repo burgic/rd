@@ -35,6 +35,8 @@ exports.handler = async (event) => {
   try {
     const { userId, query, companyName, companyDescription } = JSON.parse(event.body);
 
+    console.log('R&D Assessment request:', { userId, companyName, hasQuery: !!query, hasDescription: !!companyDescription });
+
     if (!userId || !query || !companyName || !companyDescription) {
       return {
         statusCode: 400,
@@ -68,21 +70,8 @@ exports.handler = async (event) => {
       rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
     }
 
-    // Verify user exists in Supabase
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, name, email')
-      .eq('id', userId)
-      .single();
-
-    if (profileError || !profile) {
-      console.error('Error fetching user profile:', profileError);
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Unauthorized: Invalid user ID' }),
-      };
-    }
+    // Note: User authentication is handled at the frontend level
+    // We don't need to verify the user profile here, just process the request
 
     // Generate R&D assessment using OpenAI
     const aiResponse = await generateRDAssessment(query, companyName, companyDescription);

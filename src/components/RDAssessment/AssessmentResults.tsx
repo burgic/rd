@@ -51,6 +51,7 @@ const AssessmentResults: React.FC = () => {
       const prompt = createRDAssessmentPrompt(assessmentData);
 
       // Call the R&D assessment function
+      console.log('Sending R&D assessment request with userId:', user?.id);
       const response = await fetch('/.netlify/functions/rd-assessment', {
         method: 'POST',
         headers: {
