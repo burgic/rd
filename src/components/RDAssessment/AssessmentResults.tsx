@@ -25,32 +25,54 @@ const AssessmentResults: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [saving, setSaving] = useState(false);
-  const hasRequestedRef = useRef(false);
+  const requestMadeRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const assessmentData = location.state as AssessmentData;
 
+  // Single effect that runs once when component mounts with valid data
   useEffect(() => {
-    if (!assessmentData) {
+    // Early validation
+    if (!assessmentData?.companyName || !assessmentData?.companyDescription) {
       navigate('/rd-form');
       return;
     }
 
-    if (!user) {
+    if (!user?.id) {
       navigate('/');
       return;
     }
 
-    // Only call if we haven't already made a request and aren't currently loading
-    if (!hasRequestedRef.current && !result && !error) {
-      hasRequestedRef.current = true;
-      assessRDEligibility();
+    // Prevent multiple requests - only make request once per component lifecycle
+    if (requestMadeRef.current) {
+      console.log('Request already made for this component instance, skipping');
+      return;
     }
-  }, [assessmentData, user]); // Removed navigate from dependencies to prevent re-renders
+
+    // Mark that we're making a request
+    requestMadeRef.current = true;
+    console.log('Making R&D assessment request for:', assessmentData.companyName);
+    
+    // Make the assessment request
+    assessRDEligibility();
+
+    // Cleanup function to abort request if component unmounts
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        console.log('Aborted R&D assessment request due to component unmount');
+      }
+    };
+  }, []); // Empty dependency array - only run once on mount
 
   const assessRDEligibility = async () => {
     try {
       setLoading(true);
       setError(null);
+
+      // Create abort controller for this request
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
       // Create the R&D assessment prompt
       const prompt = createRDAssessmentPrompt(assessmentData);
@@ -68,7 +90,14 @@ const AssessmentResults: React.FC = () => {
           companyName: assessmentData.companyName,
           companyDescription: assessmentData.companyDescription
         }),
+        signal: abortController.signal, // Add abort signal
       });
+
+      // Check if request was aborted
+      if (abortController.signal.aborted) {
+        console.log('Request was aborted');
+        return;
+      }
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -87,11 +116,18 @@ const AssessmentResults: React.FC = () => {
       await saveAssessment(parsedResult);
 
     } catch (error: any) {
+      // Don't show errors for aborted requests
+      if (error.name === 'AbortError') {
+        console.log('Request was aborted');
+        return;
+      }
+      
       console.error('R&D Assessment error:', error);
       setError(error.message || 'Failed to assess R&D eligibility. Please try again.');
-      hasRequestedRef.current = false; // Reset flag on error to allow retry
+      requestMadeRef.current = false; // Reset flag on error to allow retry
     } finally {
       setLoading(false);
+      abortControllerRef.current = null; // Clear abort controller reference
     }
   };
 
@@ -230,7 +266,7 @@ Base your assessment on current HMRC guidelines and provide practical, actionabl
               ) : null}
               <button
                 onClick={() => {
-                  hasRequestedRef.current = false;
+                  requestMadeRef.current = false;
                   setError(null);
                   navigate('/rd-form');
                 }}

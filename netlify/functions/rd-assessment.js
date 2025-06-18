@@ -47,18 +47,18 @@ exports.handler = async (event) => {
       };
     }
 
-    // Rate limiting logic
+    // Simplified rate limiting - just prevent obvious abuse (10 requests per minute)
     const now = Date.now();
     if (rateLimitMap.has(userId)) {
       const { lastRequest, requestCount } = rateLimitMap.get(userId);
 
       if (now - lastRequest < 60000) { // 1-minute window
-        if (requestCount >= 3) { // Limit to 3 R&D assessments per minute
+        if (requestCount >= 10) { // Liberal limit for legitimate use
           return {
             statusCode: 429,
             headers,
             body: JSON.stringify({ 
-              error: 'Rate limit exceeded. Please wait a minute before submitting another assessment.' 
+              error: 'Too many requests. Please wait a minute before submitting more assessments.' 
             }),
           };
         }
