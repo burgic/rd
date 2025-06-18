@@ -48,7 +48,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/rd-form" 
               element={
-                <ProtectedRoute requiredRole="user">
+                <ProtectedRoute requiredRole="client">
                   <CompanyDescriptionForm />
                 </ProtectedRoute>
               } 
@@ -56,7 +56,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/rd-assessment" 
               element={
-                <ProtectedRoute requiredRole="user">
+                <ProtectedRoute requiredRole="client">
                   <AssessmentResults />
                 </ProtectedRoute>
               } 
@@ -64,7 +64,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/rd-history" 
               element={
-                <ProtectedRoute requiredRole="user">
+                <ProtectedRoute requiredRole="client">
                   <AssessmentHistory />
                 </ProtectedRoute>
               } 
