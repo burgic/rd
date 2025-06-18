@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
+import ResetPassword from './components/Auth/ResetPassword';
 import Navbar from './components/Navbar';
 import AdviserDashboard from './components/Adviser/Dashboard';
 import Insights from './components/Adviser/Insights';
@@ -38,6 +39,7 @@ import { Toaster } from 'react-hot-toast';
           <Routes>
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/adviser/adviser-dashboard" element={<ProtectedRoute requiredRole = "adviser"> <AdviserDashboard /> </ProtectedRoute>} />
             <Route path="/adviser/create-client" element={<ProtectedRoute requiredRole = "adviser"> <CreateClient /></ProtectedRoute>} />
             <Route
@@ -162,6 +164,16 @@ import { Toaster } from 'react-hot-toast';
               }
             />
           </Routes>
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+            }}
+          />
         </BrowserRouter>
       </AuthProvider>
       

@@ -1,16 +1,29 @@
 // src/components/Auth/SignIn.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabaseClient';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 // import { useAuthRedirect } from '../../hooks/useAuthRedirect';
 
 const SignIn: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
   // const [showResendButton, setShowResendButton] = useState(false);
+
+  useEffect(() => {
+    // Check if we have a success message from password reset
+    if (location.state?.message) {
+      setError(location.state.message);
+      setResetSent(true);
+      // Clear the state to prevent the message from persisting
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +89,57 @@ const SignIn: React.FC = () => {
     }
   };
 
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError('Please enter your email first');
+      return;
+    }
+
+    if (resetSent) {
+      setError('Password reset email already sent. Please check your inbox and wait a few minutes before trying again.');
+      return;
+    }
+
+    setResetLoading(true);
+    setError(null);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (resetError) {
+        console.error('Password reset error:', resetError);
+        
+        // Handle specific rate limiting error
+        if (resetError.message.includes('429') || resetError.message.includes('Too Many Requests')) {
+          throw new Error('Too many password reset requests. Please wait a few minutes before trying again.');
+        }
+        
+        // Handle other specific errors
+        if (resetError.message.includes('Invalid email')) {
+          throw new Error('Please enter a valid email address.');
+        }
+        
+        throw new Error('Failed to send reset email. Please try again in a few minutes.');
+      }
+
+      setResetSent(true);
+      setError('Password reset email sent! Check your inbox and spam folder. You can request another reset in 5 minutes if needed.');
+      
+      // Reset the flag after 5 minutes
+      setTimeout(() => {
+        setResetSent(false);
+      }, 300000); // 5 minutes
+
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      setError(error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   /*
   const handleResendConfirmation = async () => {
     setLoading(true);
@@ -109,7 +173,11 @@ return (
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-md">
+        <div className={`border p-3 rounded-md ${
+          resetSent && error.includes('Password reset email sent') 
+            ? 'bg-green-50 border-green-100 text-green-600' 
+            : 'bg-red-50 border-red-100 text-red-600'
+        }`}>
           {error}
         </div>
       )}
@@ -166,21 +234,20 @@ return (
         <p className="text-sm text-gray-600">
           <button
             type="button"
-            onClick={async () => {
-              if (email) {
-                const { error } = await supabase.auth.resetPasswordForEmail(email);
-                if (error) {
-                  setError('Failed to send reset email');
-                } else {
-                  setError('Password reset email sent! Check your inbox.');
-                }
-              } else {
-                setError('Please enter your email first');
-              }
-            }}
-            className="font-medium text-blue-600 hover:text-blue-500"
+            onClick={handlePasswordReset}
+            disabled={resetLoading || resetSent}
+            className={`font-medium ${
+              resetLoading || resetSent
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-blue-600 hover:text-blue-500'
+            }`}
           >
-            Forgot password?
+            {resetLoading 
+              ? 'Sending reset email...' 
+              : resetSent 
+                ? 'Reset email sent ✓' 
+                : 'Forgot password?'
+            }
           </button>
         </p>
         <p className="text-sm text-gray-600">

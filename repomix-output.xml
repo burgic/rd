@@ -90,6 +90,7 @@ src/
       ReportViewer.tsx
       SuitabilityReportGenerator.tsx
     Auth/
+      ResetPassword.tsx
       SignIn.tsx
       SignUp.tsx
     Chat/
@@ -174,6 +175,195 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/components/Auth/ResetPassword.tsx">
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../services/supabaseClient';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
+const ResetPassword: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    // Check if we have the necessary tokens from the URL
+    const accessToken = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
+
+    if (!accessToken || !refreshToken) {
+      setError('Invalid reset link. Please request a new password reset.');
+      return;
+    }
+
+    // Set the session with the tokens from the URL
+    supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken
+    });
+  }, [searchParams]);
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password
+      });
+
+      if (updateError) {
+        console.error('Password update error:', updateError);
+        throw updateError;
+      }
+
+      setSuccess(true);
+      
+      // Redirect to sign in after a short delay
+      setTimeout(() => {
+        navigate('/', { 
+          state: { 
+            message: 'Password updated successfully! Please sign in with your new password.' 
+          }
+        });
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      if (error.message.includes('session_not_found') || error.message.includes('invalid_token')) {
+        setError('Reset link has expired or is invalid. Please request a new password reset.');
+      } else {
+        setError('Failed to update password. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-sm text-center">
+          <div className="text-green-600">
+            <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-center text-3xl font-semibold text-gray-900">
+            Password Updated!
+          </h2>
+          <p className="text-gray-600">
+            Your password has been successfully updated. You will be redirected to the sign in page shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-sm">
+        <div>
+          <h2 className="text-center text-3xl font-semibold text-gray-900">
+            Reset Your Password
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Enter your new password below
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-md">
+            {error}
+          </div>
+        )}
+
+        <form className="mt-8 space-y-6" onSubmit={handlePasswordReset}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                New Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter new password"
+                minLength={6}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                Confirm New Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Confirm new password"
+                minLength={6}
+              />
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white 
+                ${loading 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+            >
+              {loading ? 'Updating Password...' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+
+        <div className="text-center">
+          <button
+            onClick={() => navigate('/')}
+            className="text-sm text-blue-600 hover:text-blue-500"
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ResetPassword;
+</file>
 
 <file path="functions-build/chatbot.js">
 /*
@@ -3408,19 +3598,6 @@ export const handler: Handler = async () => {
 };
 </file>
 
-<file path="netlify/functions/tsconfig.functions.json">
-// netlify/functions/tsconfig.functions.json
-
-{
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "rootDir": "./",
-    "outDir": "../../dist/functions"
-  },
-  "include": ["**/*"]
-}
-</file>
-
 <file path="public/_redirects">
 /*    /index.html   200
 </file>
@@ -6554,188 +6731,6 @@ const SuitabilityReportGenerator: React.FC = () => {
 };
 
 export default SuitabilityReportGenerator;
-</file>
-
-<file path="src/components/Auth/SignIn.tsx">
-// src/components/Auth/SignIn.tsx
-import React, { useState } from 'react';
-import { supabase } from '../../services/supabaseClient';
-import { Link, useNavigate } from 'react-router-dom';
-// import { useAuthRedirect } from '../../hooks/useAuthRedirect';
-
-const SignIn: React.FC = () => {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // const [showResendButton, setShowResendButton] = useState(false);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    // setShowResendButton(false);
-
-    try {
-      // First try to get the user's profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('email', email)
-        .single()
-        .throwOnError();
-
-      if (profileError && !profileError.message.includes('no rows')) {
-        console.error('Profile check error:', profileError);
-      }
-
-      // Attempt sign in
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-
-        console.error('Sign in error:', signInError);
-/*
-        if (signInError.message.includes('Email not confirmed')) {
-          setShowResendButton(true);
-          throw new Error('Please confirm your email address. Check your inbox for a confirmation link.');
-        }
-*/
-        if (signInError.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password');
-        }
-        if (signInError.message.includes('Database error')) {
-          throw new Error('Service temporarily unavailable. Please try again in a few moments.');
-        }
-        throw signInError;
-      }
-
-      if (!data.user) {
-        throw new Error('Sign in successful but no user data returned');
-      }
-
-      // Get role from either profile or user metadata
-      const userRole = profile?.role || data.user.user_metadata?.role;
-
-      if (userRole === 'adviser') {
-        navigate('/adviser/adviser-dashboard');
-      } else {
-        navigate('/client/client-dashboard');
-      }
-
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /*
-  const handleResendConfirmation = async () => {
-    setLoading(true);
-    try {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-      });
-
-      if (resendError) throw resendError;
-
-      setError('Confirmation email resent. Please check your inbox.');
-      setShowResendButton(false);
-    } catch (error: any) {
-      console.error('Resend error:', error);
-      setError('Failed to resend confirmation email. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-*/
-
-return (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-    <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-sm">
-      <div>
-        <h2 className="text-center text-3xl font-semibold text-gray-900">
-          Sign In
-        </h2>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-md">
-          {error}
-        </div>
-      )}
-
-      <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your email"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your password"
-            />
-          </div>
-        </div>
-
-        <div>
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white 
-              ${loading 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </div>
-      </form>
-
-      <div className="mt-6 text-center">
-        <p className="text-sm text-gray-600">
-          Don't have an account?{' '}
-          <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
-            Sign up here
-          </Link>
-        </p>
-      </div>
-    </div>
-  </div>
-);
-
-}
-
-export default SignIn;
 </file>
 
 <file path="src/components/Auth/SignUp.tsx">
@@ -13088,28 +13083,6 @@ export class DocumentService {
 }
 </file>
 
-<file path="src/services/supabaseClient.ts">
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.REACT_APP_SUPABASE_DATABASE_URL!;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey,
-{
-    auth: {
-      persistSession: true, // Enable session persistence
-      autoRefreshToken: false, // Disable auto-refreshing the token
-      storageKey: 'app-auth',
-      detectSessionInUrl: true,
-      storage: localStorage // Use localStorage for session storage
-    },
-    db: {
-        schema: 'public'
-    }
-  }
-)
-</file>
-
 <file path="src/services/supabaseOps.ts">
 // supabaseOps.ts
 import { supabase } from './supabaseClient'; 
@@ -13928,6 +13901,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
+import ResetPassword from './components/Auth/ResetPassword';
 import Navbar from './components/Navbar';
 import AdviserDashboard from './components/Adviser/Dashboard';
 import Insights from './components/Adviser/Insights';
@@ -13962,6 +13936,7 @@ import { Toaster } from 'react-hot-toast';
           <Routes>
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/adviser/adviser-dashboard" element={<ProtectedRoute requiredRole = "adviser"> <AdviserDashboard /> </ProtectedRoute>} />
             <Route path="/adviser/create-client" element={<ProtectedRoute requiredRole = "adviser"> <CreateClient /></ProtectedRoute>} />
             <Route
@@ -14086,6 +14061,16 @@ import { Toaster } from 'react-hot-toast';
               }
             />
           </Routes>
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+            }}
+          />
         </BrowserRouter>
       </AuthProvider>
       
@@ -14432,149 +14417,6 @@ yarn-error.log*
 
 <file path=".nvmrc">
 18.17.0
-</file>
-
-<file path="netlify.toml">
-[build]
-  command = "CI=false npm install && npm run build"
-  publish = "dist" # For Vite
-  functions = ".netlify/functions"
-
-[build.environment]
-  NODE_VERSION = "18"
-  NPM_VERSION = "10.8.2"
-  CI = "false"
-  SECRETS_SCAN_ENABLED = "false"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/*"
-  to = "index.html"
-  status = 200
-  force = true
-
-[functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@supabase/supabase-js", "openai", "@anthropic-ai/sdk"]
-  directory = "netlify/functions"
-  
-  [functions.chatbot]
-  timeout = "30"
-
-[dev]
-  framework = "vite"
-  targetPort = 5173
-
-# Add proper MIME type headers
-[[headers]]
-  for = "/assets/*.js"
-[headers.values]
-  Content-Type = "text/plain"
-
-[[headers]]
-  for = "/assets/*.css"
-[headers.values]
-  Content-Type = "text/css"
-
-[[headers]]
-  for = "/*"
-[headers.values]
-  X-Frame-Options = "DENY"
-  X-XSS-Protection = "1; mode=block"
-  X-Content-Type-Options = "nosniff"
-  Referrer-Policy = "strict-origin-when-cross-origin"
-  Access-Control-Allow-Origin = "*"
-  Access-Control-Allow-Methods = "GET, POST, OPTIONS"
-  Access-Control-Allow-Headers = "Content-Type"
-</file>
-
-<file path="package.json">
-{
-  "name": "workflow",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.3",
-    "@netlify/functions": "^2.8.2",
-    "@supabase/supabase-js": "^2.46.1",
-    "@tailwindcss/forms": "^0.5.3",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^16.18.120",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@types/react-router-dom": "^5.3.3",
-    "@types/recharts": "^1.8.29",
-    "ajv": "^8.12.0",
-    "ajv-keywords": "^5.1.0",
-    "chart.js": "^4.4.6",
-    "json2csv": "^6.0.0-alpha.2",
-    "lucide-react": "^0.468.0",
-    "next": "^15.0.3",
-    "node-fetch": "^3.3.2",
-    "openai": "^4.74.0",
-    "react": "^18.2.0",
-    "react-chartjs-2": "^5.2.0",
-    "react-dom": "^18.2.0",
-    "react-hot-toast": "^2.5.2",
-    "react-router-dom": "^6.20.0",
-    "react-scripts": "^5.0.1",
-    "recharts": "^2.15.1",
-    "vite": "^4.x.x",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "NODE_OPTIONS='--openssl-legacy-provider' react-scripts start",
-    "build": "NODE_OPTIONS='--openssl-legacy-provider' npm run build:app && npm run build:functions",
-    "build:app": "react-scripts build",
-    "build:functions": "tsc -p netlify/functions/tsconfig.functions.json && echo 'Functions built to .netlify/functions-build' && ls .netlify/functions-build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "clean": "rm -rf build .netlify/functions-build && echo 'Cleaned build folders'",
-    "netlify:build": "netlify build"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@types/node": "^22.10.1",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "autoprefixer": "^10.4.20",
-    "esbuild": "^0.24.0",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
-    "typescript": "^4.9.5"
-  },
-  "resolutions": {
-    "nth-check": "^2.0.1",
-    "postcss": "^8.4.31",
-    "svgo": "^3.0.0"
-  }
-}
 </file>
 
 <file path="postcss.config.js">
@@ -15025,6 +14867,470 @@ module.exports = {
     "dist"
   ]
 }
+</file>
+
+<file path="netlify/functions/tsconfig.functions.json">
+// netlify/functions/tsconfig.functions.json
+
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "rootDir": "./",
+    "outDir": "../../.netlify/functions-build",
+    "skipLibCheck": true
+  },
+  "include": ["types/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.js", "test.ts"]
+}
+</file>
+
+<file path="src/components/Auth/SignIn.tsx">
+// src/components/Auth/SignIn.tsx
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../services/supabaseClient';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+// import { useAuthRedirect } from '../../hooks/useAuthRedirect';
+
+const SignIn: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
+  // const [showResendButton, setShowResendButton] = useState(false);
+
+  useEffect(() => {
+    // Check if we have a success message from password reset
+    if (location.state?.message) {
+      setError(location.state.message);
+      setResetSent(true);
+      // Clear the state to prevent the message from persisting
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    // setShowResendButton(false);
+
+    try {
+      // Attempt sign in first
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        console.error('Sign in error:', signInError);
+        if (signInError.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password');
+        }
+        if (signInError.message.includes('Database error')) {
+          throw new Error('Service temporarily unavailable. Please try again in a few moments.');
+        }
+        throw signInError;
+      }
+
+      if (!data.user) {
+        throw new Error('Sign in successful but no user data returned');
+      }
+
+      // After successful sign in, get the user's profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Profile check error:', profileError);
+        // If profile doesn't exist, use metadata role or default to client
+        const userRole = data.user.user_metadata?.role || 'client';
+        if (userRole === 'adviser') {
+          navigate('/adviser/adviser-dashboard');
+        } else {
+          navigate('/client/client-dashboard');
+        }
+        return;
+      }
+
+      // Get role from profile or user metadata
+      const userRole = profile?.role || data.user.user_metadata?.role || 'client';
+
+      if (userRole === 'adviser') {
+        navigate('/adviser/adviser-dashboard');
+      } else {
+        navigate('/client/client-dashboard');
+      }
+
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError('Please enter your email first');
+      return;
+    }
+
+    if (resetSent) {
+      setError('Password reset email already sent. Please check your inbox and wait a few minutes before trying again.');
+      return;
+    }
+
+    setResetLoading(true);
+    setError(null);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (resetError) {
+        console.error('Password reset error:', resetError);
+        
+        // Handle specific rate limiting error
+        if (resetError.message.includes('429') || resetError.message.includes('Too Many Requests')) {
+          throw new Error('Too many password reset requests. Please wait a few minutes before trying again.');
+        }
+        
+        // Handle other specific errors
+        if (resetError.message.includes('Invalid email')) {
+          throw new Error('Please enter a valid email address.');
+        }
+        
+        throw new Error('Failed to send reset email. Please try again in a few minutes.');
+      }
+
+      setResetSent(true);
+      setError('Password reset email sent! Check your inbox and spam folder. You can request another reset in 5 minutes if needed.');
+      
+      // Reset the flag after 5 minutes
+      setTimeout(() => {
+        setResetSent(false);
+      }, 300000); // 5 minutes
+
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      setError(error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  /*
+  const handleResendConfirmation = async () => {
+    setLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+
+      if (resendError) throw resendError;
+
+      setError('Confirmation email resent. Please check your inbox.');
+      setShowResendButton(false);
+    } catch (error: any) {
+      console.error('Resend error:', error);
+      setError('Failed to resend confirmation email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+*/
+
+return (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-sm">
+      <div>
+        <h2 className="text-center text-3xl font-semibold text-gray-900">
+          Sign In
+        </h2>
+      </div>
+
+      {error && (
+        <div className={`border p-3 rounded-md ${
+          resetSent && error.includes('Password reset email sent') 
+            ? 'bg-green-50 border-green-100 text-green-600' 
+            : 'bg-red-50 border-red-100 text-red-600'
+        }`}>
+          {error}
+        </div>
+      )}
+
+      <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter your email"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter your password"
+            />
+          </div>
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white 
+              ${loading 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </div>
+      </form>
+
+      <div className="mt-6 text-center space-y-2">
+        <p className="text-sm text-gray-600">
+          <button
+            type="button"
+            onClick={handlePasswordReset}
+            disabled={resetLoading || resetSent}
+            className={`font-medium ${
+              resetLoading || resetSent
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-blue-600 hover:text-blue-500'
+            }`}
+          >
+            {resetLoading 
+              ? 'Sending reset email...' 
+              : resetSent 
+                ? 'Reset email sent ✓' 
+                : 'Forgot password?'
+            }
+          </button>
+        </p>
+        <p className="text-sm text-gray-600">
+          Don't have an account?{' '}
+          <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+            Sign up here
+          </Link>
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+}
+
+export default SignIn;
+</file>
+
+<file path="netlify.toml">
+[build]
+  command = "CI=false npm install && npm run build"
+  publish = "build" # For Create React App
+  functions = ".netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_VERSION = "10.8.2"
+  CI = "false"
+  SECRETS_SCAN_ENABLED = "false"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "index.html"
+  status = 200
+  force = true
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@supabase/supabase-js", "openai", "@anthropic-ai/sdk"]
+  directory = "netlify/functions"
+  
+  [functions.chatbot]
+  timeout = "30"
+
+[dev]
+  framework = "vite"
+  targetPort = 5173
+
+# Add proper MIME type headers
+[[headers]]
+  for = "/assets/*.js"
+[headers.values]
+  Content-Type = "text/plain"
+
+[[headers]]
+  for = "/assets/*.css"
+[headers.values]
+  Content-Type = "text/css"
+
+[[headers]]
+  for = "/*"
+[headers.values]
+  X-Frame-Options = "DENY"
+  X-XSS-Protection = "1; mode=block"
+  X-Content-Type-Options = "nosniff"
+  Referrer-Policy = "strict-origin-when-cross-origin"
+  Access-Control-Allow-Origin = "*"
+  Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+  Access-Control-Allow-Headers = "Content-Type"
+</file>
+
+<file path="package.json">
+{
+  "name": "workflow",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@netlify/functions": "^2.8.2",
+    "@supabase/supabase-js": "^2.46.1",
+    "@tailwindcss/forms": "^0.5.3",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.120",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/recharts": "^1.8.29",
+    "ajv": "^8.12.0",
+    "ajv-keywords": "^5.1.0",
+    "chart.js": "^4.4.6",
+    "json2csv": "^6.0.0-alpha.2",
+    "lucide-react": "^0.468.0",
+    "next": "^15.0.3",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.74.0",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.5.2",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "^5.0.1",
+    "recharts": "^2.15.1",
+    "vite": "^4.x.x",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "NODE_OPTIONS='--openssl-legacy-provider' react-scripts start",
+    "build": "NODE_OPTIONS='--openssl-legacy-provider' npm run build:app && npm run build:functions",
+    "build:app": "react-scripts build",
+    "build:functions": "mkdir -p .netlify/functions-build && tsc -p netlify/functions/tsconfig.functions.json && echo 'Functions built to .netlify/functions-build' && ls .netlify/functions-build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "clean": "rm -rf build .netlify/functions-build && echo 'Cleaned build folders'",
+    "netlify:build": "netlify build"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "esbuild": "^0.24.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^4.9.5"
+  },
+  "resolutions": {
+    "nth-check": "^2.0.1",
+    "postcss": "^8.4.31",
+    "svgo": "^3.0.0"
+  }
+}
+</file>
+
+<file path="src/services/supabaseClient.ts">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey,
+{
+    auth: {
+      persistSession: true, // Enable session persistence
+      autoRefreshToken: true, // Enable auto-refreshing the token
+      storageKey: 'app-auth',
+      detectSessionInUrl: true,
+      storage: localStorage // Use localStorage for session storage
+    },
+    db: {
+        schema: 'public'
+    },
+    global: {
+      headers: {
+        'x-client-info': 'supabase-js-web'
+      }
+    }
+  }
+)
 </file>
 
 </files>
