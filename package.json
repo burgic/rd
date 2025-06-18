@@ -38,7 +38,7 @@
     "start": "NODE_OPTIONS='--openssl-legacy-provider' react-scripts start",
     "build": "NODE_OPTIONS='--openssl-legacy-provider' npm run build:app && npm run build:functions",
     "build:app": "react-scripts build",
-    "build:functions": "tsc -p netlify/functions/tsconfig.functions.json && echo 'Functions built to .netlify/functions-build' && ls .netlify/functions-build",
+    "build:functions": "mkdir -p .netlify/functions-build && tsc -p netlify/functions/tsconfig.functions.json && echo 'Functions built to .netlify/functions-build' && ls .netlify/functions-build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "clean": "rm -rf build .netlify/functions-build && echo 'Cleaned build folders'",

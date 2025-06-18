@@ -1,6 +1,6 @@
 [build]
   command = "CI=false npm install && npm run build"
-  publish = "dist" # For Vite
+  publish = "build" # For Create React App
   functions = ".netlify/functions"
 
 [build.environment]

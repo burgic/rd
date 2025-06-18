@@ -1,10 +1,22 @@
 // netlify/functions/tsconfig.functions.json
 
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "rootDir": "./",
-    "outDir": "../../dist/functions"
+    "outDir": "../../.netlify/functions-build",
+    "skipLibCheck": true
   },
-  "include": ["**/*"]
+  "include": ["types/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.js", "test.ts"]
 }
