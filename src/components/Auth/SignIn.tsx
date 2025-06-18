@@ -74,13 +74,17 @@ const SignIn: React.FC = () => {
         // If profile doesn't exist, use metadata role or default to client
         const userRole = data.user.user_metadata?.role || 'client';
         console.log('Using metadata role:', userRole);
-        if (userRole === 'adviser') {
-          console.log('Navigating to adviser dashboard');
-          navigate('/adviser/adviser-dashboard');
-        } else {
-          console.log('Navigating to client dashboard');
-          navigate('/client/client-dashboard');
-        }
+        
+        // Add a small delay to ensure AuthContext updates before navigation
+        setTimeout(() => {
+          if (userRole === 'adviser') {
+            console.log('Navigating to adviser dashboard');
+            navigate('/adviser/adviser-dashboard');
+          } else {
+            console.log('Navigating to client dashboard');
+            navigate('/client/client-dashboard');
+          }
+        }, 100); // Small delay to let AuthContext update
         return;
       }
 
@@ -88,13 +92,16 @@ const SignIn: React.FC = () => {
       const userRole = profile?.role || data.user.user_metadata?.role || 'client';
       console.log('Final user role determined:', userRole);
 
-      if (userRole === 'adviser') {
-        console.log('Navigating to adviser dashboard');
-        navigate('/adviser/adviser-dashboard');
-      } else {
-        console.log('Navigating to client dashboard');
-        navigate('/client/client-dashboard');
-      }
+      // Add a small delay to ensure AuthContext updates before navigation
+      setTimeout(() => {
+        if (userRole === 'adviser') {
+          console.log('Navigating to adviser dashboard');
+          navigate('/adviser/adviser-dashboard');
+        } else {
+          console.log('Navigating to client dashboard');
+          navigate('/client/client-dashboard');
+        }
+      }, 100); // Small delay to let AuthContext update
 
     } catch (error: any) {
       console.error('Sign in error:', error);

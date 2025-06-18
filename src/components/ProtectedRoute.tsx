@@ -11,8 +11,17 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { user, loading } = useContext(AuthContext);
 
+  console.log('ProtectedRoute check:', { 
+    loading, 
+    hasUser: !!user, 
+    userEmail: user?.email, 
+    userRole: user?.user_metadata?.role, 
+    requiredRole 
+  });
+
   // Show loading state while auth is being determined
   if (loading) {
+    console.log('ProtectedRoute: showing loading state');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -24,13 +33,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   }
 
   if (!user) {
+    console.log('ProtectedRoute: no user, redirecting to sign in');
     return <Navigate to="/" replace />;
   }
 
   if (requiredRole && user.user_metadata?.role !== requiredRole) {
+    console.log('ProtectedRoute: role mismatch, redirecting to sign in');
     return <Navigate to="/" replace/>;
   }
 
+  console.log('ProtectedRoute: access granted');
   return <>{children}</>; // Use fragment to wrap children
 };
 
