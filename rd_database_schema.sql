@@ -54,22 +54,6 @@ USING (user_id = auth.uid());
 CREATE INDEX IF NOT EXISTS rd_assessments_user_id_idx ON public.rd_assessments(user_id);
 CREATE INDEX IF NOT EXISTS rd_assessments_created_at_idx ON public.rd_assessments(created_at DESC);
 
--- Update the profiles table to simplify for R&D tool usage
--- Remove the adviser-client relationship since we don't need it for R&D assessments
-ALTER TABLE public.profiles 
-DROP COLUMN IF EXISTS adviser_id;
-
--- Update the role enum to just have 'user' since we don't need adviser/client distinction
-ALTER TABLE public.profiles 
-DROP CONSTRAINT IF EXISTS profiles_role_check;
-
-ALTER TABLE public.profiles 
-ADD CONSTRAINT profiles_role_check 
-CHECK (role IN ('user'));
-
--- Set existing users to 'user' role
-UPDATE public.profiles SET role = 'user' WHERE role IN ('client', 'adviser');
-
 -- Create a function to automatically update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -82,4 +66,7 @@ $$ language 'plpgsql';
 -- Create a trigger to automatically update the updated_at column
 CREATE TRIGGER update_rd_assessments_updated_at 
 BEFORE UPDATE ON public.rd_assessments 
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column(); 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Note: Keep existing profiles table structure with client/adviser roles
+-- The rd_assessments table works with any authenticated user regardless of role 
