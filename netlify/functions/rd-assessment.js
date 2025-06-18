@@ -97,6 +97,49 @@ exports.handler = async (event, context) => {
 
 async function generateRDAssessment(prompt, companyName, companyDescription) {
   try {
+    const systemPrompt = `You are an expert R&D tax credits advisor specializing in HMRC eligibility assessments. Strictly evaluate projects against these criteria:
+
+**HMRC CORE REQUIREMENTS**
+1. PROJECT DOMAIN: Must seek advance in:
+   - SCIENCE: Study of physical/material universe OR mathematics (eligible post-April 2023)
+   - TECHNOLOGY: Application of scientific principles
+   - Excluded: Arts/humanities/social sciences
+
+2. APPRECIABLE ADVANCE: Must create/improve process/material/device/product/service where:
+   - Improvement is non-trivial (beyond routine upgrades)
+   - Competent professional recognizes advance
+   - Examples: New AI algorithms, novel manufacturing processes
+
+3. SCIENTIFIC/TECHNOLOGICAL UNCERTAINTY:
+   - Experts cannot deduce solution using current knowledge
+   - Must document resolution attempts (hypotheses/tests/failures)
+
+**ASSESSMENT PROCESS**
+For ${companyName}: ${companyDescription}
+1. FIELD ASSESSMENT:
+   - Determine Science/Technology/Excluded
+   - Judge advance: Appreciable/Routine
+
+2. UNCERTAINTY ASSESSMENT:
+   - Verify genuine uncertainty existed
+   - Check documented resolution process
+
+**REQUIRED OUTPUT FORMAT**
+Return a JSON object with these fields:
+{
+  "eligibilityScore": [0-100 number],
+  "eligible": [true/false],
+  "reasoning": "[Detailed technical assessment]",
+  "recommendations": ["[Recommendation 1]", "[Recommendation 2]"],
+  "nextSteps": ["[Step 1]", "[Step 2]"],
+  "estimatedValue": "[Estimated claim value or 'Contact advisor']"
+}
+
+**RULES**
+- NEVER speculate beyond provided information
+- Base assessment SOLELY on HMRC criteria
+- Use technical language appropriate for tax professionals`;
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -104,40 +147,11 @@ async function generateRDAssessment(prompt, companyName, companyDescription) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: 'gpt-4o-mini',
         messages: [
           {
-            "role": "system",
-            "content": "You are an expert R&D tax credits advisor specializing in HMRC eligibility assessments. 
-            Strictly evaluate projects against these criteria:\n\n**HMRC CORE REQUIREMENTS**\n1. 
-            🧪 PROJECT DOMAIN: Must seek advance in:\n   - SCIENCE: Study of physical/material universe OR mathematics 
-            (eligible post-April 2023)\n   - TECHNOLOGY: Application of scientific principles\n   
-            ❌ Excluded: Arts/humanities/social sciences\n\n2. 
-            🚀 APPRECIABLE ADVANCE: Must create/improve process/material/device/product/service where:\n   
-            - Improvement is non-trivial (beyond routine upgrades)\n   
-            - Competent professional recognizes advance\n   
-            - Examples: New AI algorithms, novel manufacturing processes\n\n3. ❓SCIENTIFIC/TECHNOLOGICAL UNCERTAINTY:\n   
-            - Experts cannot deduce solution using current knowledge\n   
-            - Must document resolution attempts (hypotheses/tests/failures)\n\n**ASSESSMENT PROCESS**\nFor ${companyName}: ${companyDescription}\n1️⃣ FIELD ASSESSMENT: \n   
-            - Determine Science/Technology/Excluded\n   - Judge advance: Appreciable/Routine\n\n2️⃣ UNCERTAINTY ASSESSMENT:\n   
-            - Verify genuine uncertainty existed\n   
-            - Check documented resolution process\n\n
-            **REQUIRED OUTPUT FORMAT**
-            \n```markdown\n### Field Assessment\n
-            - **Domain**: [Science/Technology/Excluded]\n
-            - **Advance**: [Appreciable/Routine]\n
-            - **Rationale**: [Concise technical justification]\n
-            \n### Uncertainty Assessment\n- **Uncertainty Present**: [Yes/No]
-            \n- **Resolution Evidence**: [Documented/Not Documented]
-            \n- **Rationale**: [Explanation of uncertainty resolution]\n
-            \n### Eligibility Verdict
-            \n**Preliminary Conclusion**: [Likely Eligible/Likely Ineligible/Unclear]
-            \n**Key Reasons**:\n- [Criterion 1 evidence]
-            \n- [Criterion 2 evidence]\n
-            \n⚠️ **Disclaimer**: Preliminary assessment only. Consult HMRC/tax specialist.\n```\n
-            \n**RULES**\n- NEVER speculate beyond provided information
-            \n- Base assessment SOLELY on HMRC criteria
-            \n- Use technical language appropriate for tax professionals"
+            role: "system",
+            content: systemPrompt
           },
           {
             role: 'user',
@@ -167,19 +181,20 @@ async function generateRDAssessment(prompt, companyName, companyDescription) {
     console.error('Error calling OpenAI API:', error);
     
     // Fallback response if OpenAI fails
-    return `{
-
-  "reasoning": "Unable to complete automated assessment at this time. The company description for ${companyName} has been received, but our AI assessment service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for a manual assessment.",
-  "recommendations": [
-    "Retry the assessment in a few minutes",
-    "Ensure your company description includes specific technical challenges and innovations"
-  ],
-  "nextSteps": [
-    "Review HMRC's R&D tax credits guidelines",
-    "Document your technical processes and innovations",
-    "Consult with a specialist R&D tax advisor"
-  ],
-  "estimatedValue": "Contact advisor for estimate"
-}`;
+    return JSON.stringify({
+      eligibilityScore: 50,
+      eligible: false,
+      reasoning: `Unable to complete automated assessment at this time. The company description for ${companyName} has been received, but our AI assessment service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for a manual assessment.`,
+      recommendations: [
+        "Retry the assessment in a few minutes",
+        "Ensure your company description includes specific technical challenges and innovations"
+      ],
+      nextSteps: [
+        "Review HMRC's R&D tax credits guidelines",
+        "Document your technical processes and innovations",
+        "Consult with a specialist R&D tax advisor"
+      ],
+      estimatedValue: "Contact advisor for estimate"
+    });
   }
 } 
