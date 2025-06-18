@@ -22,6 +22,7 @@ const AssessmentHistory: React.FC = () => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -55,10 +56,6 @@ const AssessmentHistory: React.FC = () => {
   };
 
   const deleteAssessment = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this assessment?')) {
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from('rd_assessments')
@@ -70,9 +67,10 @@ const AssessmentHistory: React.FC = () => {
       }
 
       setAssessments(assessments.filter(a => a.id !== id));
+      setDeleteConfirm(null);
     } catch (error: any) {
       console.error('Error deleting assessment:', error);
-      alert('Failed to delete assessment');
+      setError('Failed to delete assessment');
     }
   };
 
@@ -177,7 +175,7 @@ const AssessmentHistory: React.FC = () => {
                             {assessment.eligible ? 'Eligible' : 'Not Eligible'}
                           </div>
                           <button
-                            onClick={() => deleteAssessment(assessment.id)}
+                            onClick={() => setDeleteConfirm(assessment.id)}
                             className="text-red-600 hover:text-red-800 p-1"
                             title="Delete assessment"
                           >
@@ -233,6 +231,32 @@ const AssessmentHistory: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Assessment</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this assessment? This action cannot be undone.
+            </p>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteAssessment(deleteConfirm)}
+                className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -23,13 +23,31 @@ ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles 
 DROP COLUMN IF EXISTS adviser_id CASCADE;
 
--- First, set existing users to 'user' role
-UPDATE public.profiles SET role = 'user' WHERE role IN ('client', 'adviser');
+-- First, let's see what roles currently exist (for debugging)
+-- You can comment this out after running once
+DO $$
+DECLARE
+    role_record RECORD;
+BEGIN
+    RAISE NOTICE 'Current roles in profiles table:';
+    FOR role_record IN SELECT DISTINCT role, COUNT(*) as count FROM public.profiles GROUP BY role
+    LOOP
+        RAISE NOTICE 'Role: %, Count: %', COALESCE(role_record.role, 'NULL'), role_record.count;
+    END LOOP;
+END $$;
 
--- Then update the role constraint
+-- Drop the existing constraint first (in case it exists)
 ALTER TABLE public.profiles 
 DROP CONSTRAINT IF EXISTS profiles_role_check;
 
+-- Set ALL users to 'user' role (handles any possible role value including NULL)
+UPDATE public.profiles SET role = 'user';
+
+-- Make sure the role column is NOT NULL
+ALTER TABLE public.profiles 
+ALTER COLUMN role SET NOT NULL;
+
+-- Now add the constraint
 ALTER TABLE public.profiles 
 ADD CONSTRAINT profiles_role_check 
 CHECK (role IN ('user'));
