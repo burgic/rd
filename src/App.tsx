@@ -5,6 +5,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
 import ResetPassword from './components/Auth/ResetPassword';
+import CompanyDescriptionForm from './components/RDAssessment/CompanyDescriptionForm';
+import AssessmentResults from './components/RDAssessment/AssessmentResults';
+import AssessmentHistory from './components/RDAssessment/AssessmentHistory';
 import Navbar from './components/Navbar';
 import AdviserDashboard from './components/Adviser/Dashboard';
 import Insights from './components/Adviser/Insights';
@@ -40,6 +43,32 @@ import { Toaster } from 'react-hot-toast';
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            
+            {/* R&D Assessment Routes */}
+            <Route 
+              path="/rd-form" 
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <CompanyDescriptionForm />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/rd-assessment" 
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <AssessmentResults />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/rd-history" 
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <AssessmentHistory />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/adviser/adviser-dashboard" element={<ProtectedRoute requiredRole = "adviser"> <AdviserDashboard /> </ProtectedRoute>} />
             <Route path="/adviser/create-client" element={<ProtectedRoute requiredRole = "adviser"> <CreateClient /></ProtectedRoute>} />
             <Route

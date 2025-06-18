@@ -77,30 +77,20 @@ const SignIn: React.FC = () => {
         
         // Add a small delay to ensure AuthContext updates before navigation
         setTimeout(() => {
-          if (userRole === 'adviser') {
-            console.log('Navigating to adviser dashboard');
-            navigate('/adviser/adviser-dashboard');
-          } else {
-            console.log('Navigating to client dashboard');
-            navigate('/client/client-dashboard');
-          }
+          console.log('Navigating to R&D form');
+          navigate('/rd-form');
         }, 100); // Small delay to let AuthContext update
         return;
       }
 
-      // Get role from profile or user metadata
-      const userRole = profile?.role || data.user.user_metadata?.role || 'client';
+      // Get role from profile or user metadata - simplified for R&D tool
+      const userRole = profile?.role || data.user.user_metadata?.role || 'user';
       console.log('Final user role determined:', userRole);
 
       // Add a small delay to ensure AuthContext updates before navigation
       setTimeout(() => {
-        if (userRole === 'adviser') {
-          console.log('Navigating to adviser dashboard');
-          navigate('/adviser/adviser-dashboard');
-        } else {
-          console.log('Navigating to client dashboard');
-          navigate('/client/client-dashboard');
-        }
+        console.log('Navigating to R&D form');
+        navigate('/rd-form');
       }, 100); // Small delay to let AuthContext update
 
     } catch (error: any) {

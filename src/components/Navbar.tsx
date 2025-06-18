@@ -24,36 +24,22 @@ const Navbar: React.FC = () => {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          Workflow
+          R&D Assessment
         </Link>
         <ul className="navbar-menu">
-        {user && user.user_metadata.role === 'client' && (
+        {user && (
           <li className="navbar-item">
-            <Link to="/client/client-dashboard" className="navbar-link">
-              Dashboard
+            <Link to="/rd-form" className="navbar-link">
+              New Assessment
             </Link>
           </li>
           )}
-          {user && user.user_metadata.role === 'client' && (
+          {user && (
           <li className="navbar-item">
-            <Link to="/client/profile" className="navbar-link">
-              Profile
+            <Link to="/rd-history" className="navbar-link">
+              History
             </Link>
           </li>
-          )}
-          {user && user.user_metadata.role === 'client' && (
-          <li className="navbar-item">
-            <Link to="/chat/chat" className="navbar-link">
-              Chat
-            </Link>
-          </li>
-          )}
-          {user && user.user_metadata.role === 'adviser' && (
-            <li className="navbar-item">
-              <Link to="/adviser/adviser-dashboard" className="navbar-link">
-                Adviser
-              </Link>
-            </li>
           )}
           {!user ? (
             <li className="navbar-item">
