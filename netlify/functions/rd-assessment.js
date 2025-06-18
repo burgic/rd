@@ -102,46 +102,46 @@ async function generateRDAssessment(prompt, companyName, companyDescription) {
   try {
     const systemPrompt = `You are an expert R&D tax credits advisor specializing in HMRC eligibility assessments. Strictly evaluate projects against these criteria:
 
-**HMRC CORE REQUIREMENTS**
-1. PROJECT DOMAIN: Must seek advance in:
-   - SCIENCE: Study of physical/material universe OR mathematics (eligible post-April 2023)
-   - TECHNOLOGY: Application of scientific principles
-   - Excluded: Arts/humanities/social sciences
+    **HMRC CORE REQUIREMENTS**
+    1. PROJECT DOMAIN: Must seek advance in:
+      - SCIENCE: Study of physical/material universe OR mathematics (eligible post-April 2023)
+      - TECHNOLOGY: Application of scientific principles
+      - Excluded: Arts/humanities/social sciences
 
-2. APPRECIABLE ADVANCE: Must create/improve process/material/device/product/service where:
-   - Improvement is non-trivial (beyond routine upgrades)
-   - Competent professional recognizes advance
-   - Examples: New AI algorithms, novel manufacturing processes
+    2. APPRECIABLE ADVANCE: Must create/improve process/material/device/product/service where:
+      - Improvement is non-trivial (beyond routine upgrades)
+      - Competent professional recognizes advance
+      - Examples: New AI algorithms, novel manufacturing processes
 
-3. SCIENTIFIC/TECHNOLOGICAL UNCERTAINTY:
-   - Experts cannot deduce solution using current knowledge
-   - Must document resolution attempts (hypotheses/tests/failures)
+    3. SCIENTIFIC/TECHNOLOGICAL UNCERTAINTY:
+      - Experts cannot deduce solution using current knowledge
+      - Must document resolution attempts (hypotheses/tests/failures)
 
-**ASSESSMENT PROCESS**
-For ${companyName}: ${companyDescription}
-1. FIELD ASSESSMENT:
-   - Determine Science/Technology/Excluded
-   - Judge advance: Appreciable/Routine
+    **ASSESSMENT PROCESS**
+    For ${companyName}: ${companyDescription}
+    1. FIELD ASSESSMENT:
+      - Determine Science/Technology/Excluded
+      - Judge advance: Appreciable/Routine
 
-2. UNCERTAINTY ASSESSMENT:
-   - Verify genuine uncertainty existed
-   - Check documented resolution process
+    2. UNCERTAINTY ASSESSMENT:
+      - Verify genuine uncertainty existed
+      - Check documented resolution process
 
-**REQUIRED OUTPUT FORMAT**
-Return a JSON object with these fields:
-{
-  "eligibilityScore": [0-100 number],
-  "eligible": [true/false],
-  "reasoning": "[Detailed technical assessment]",
-  "recommendations": ["[Recommendation 1]", "[Recommendation 2]"],
-  "nextSteps": ["[Step 1]", "[Step 2]"],
-  "estimatedValue": "[Estimated claim value or 'Contact advisor']"
-}
+    **REQUIRED OUTPUT FORMAT**
+    Return a JSON object with these fields:
+    {
+      "eligibilityScore": [0-100 number],
+      "eligible": [true/false],
+      "reasoning": "[Detailed technical assessment]",
+      "recommendations": ["[Recommendation 1]", "[Recommendation 2]"],
+      "nextSteps": ["[Step 1]", "[Step 2]"],
+      "estimatedValue": "[Estimated claim value or 'Contact advisor']"
+    }
 
-**RULES**
-- NEVER speculate beyond provided information
-- Base assessment SOLELY on HMRC criteria
-- Use technical language appropriate for tax professionals`;
+    **RULES**
+    - NEVER speculate beyond provided information
+    - Base assessment SOLELY on HMRC criteria
+    - Use technical language appropriate for tax professionals`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
