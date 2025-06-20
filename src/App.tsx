@@ -30,6 +30,11 @@ import './styles.css';
 import './styles/globals.css';
 import Chatbot from './components/Chat/Chat';
 import RiskAssessmentForm from 'components/Client/Risk/RiskAssessmentForm';
+import TranscriptForm from './components/CallTranscripts/TranscriptForm';
+import TranscriptAnalysis from './components/CallTranscripts/TranscriptAnalysis';
+import TranscriptHistory from './components/CallTranscripts/TranscriptHistory';
+import TranscriptViewer from './components/CallTranscripts/TranscriptViewer';
+import OverviewPage from './components/Dashboard/OverviewPage';
 import { Toaster } from 'react-hot-toast';
 
 
@@ -44,6 +49,16 @@ import { Toaster } from 'react-hot-toast';
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            
+            {/* Overview/Dashboard Route */}
+            <Route 
+              path="/overview" 
+              element={
+                <ProtectedRoute>
+                  <OverviewPage />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* R&D Assessment Routes */}
             <Route 
@@ -78,6 +93,41 @@ import { Toaster } from 'react-hot-toast';
                 </ProtectedRoute>
               } 
             />
+
+            {/* Call Transcript Analysis Routes */}
+            <Route 
+              path="/call-transcript-form" 
+              element={
+                <ProtectedRoute>
+                  <TranscriptForm />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript-analysis" 
+              element={
+                <ProtectedRoute>
+                  <TranscriptAnalysis />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript-history" 
+              element={
+                <ProtectedRoute>
+                  <TranscriptHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript/:analysisId" 
+              element={
+                <ProtectedRoute>
+                  <TranscriptViewer />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="/adviser/adviser-dashboard" element={<ProtectedRoute requiredRole = "adviser"> <AdviserDashboard /> </ProtectedRoute>} />
             <Route path="/adviser/create-client" element={<ProtectedRoute requiredRole = "adviser"> <CreateClient /></ProtectedRoute>} />
             <Route

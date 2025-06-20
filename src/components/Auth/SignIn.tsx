@@ -77,8 +77,8 @@ const SignIn: React.FC = () => {
         
         // Add a small delay to ensure AuthContext updates before navigation
         setTimeout(() => {
-          console.log('Navigating to R&D form');
-          navigate('/rd-form');
+          console.log('Navigating to overview page');
+          navigate('/overview');
         }, 100); // Small delay to let AuthContext update
         return;
       }
@@ -89,8 +89,8 @@ const SignIn: React.FC = () => {
 
       // Add a small delay to ensure AuthContext updates before navigation
       setTimeout(() => {
-        console.log('Navigating to R&D form');
-        navigate('/rd-form');
+        console.log('Navigating to overview page');
+        navigate('/overview');
       }, 100); // Small delay to let AuthContext update
 
     } catch (error: any) {
