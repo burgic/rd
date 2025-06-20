@@ -111,12 +111,34 @@ const DirectReportAnalysis: React.FC = () => {
       if (abortController.signal.aborted) return;
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            errorData = JSON.parse(responseText);
+          } else {
+            errorData = { error: 'Empty response from server' };
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorData = { error: `Server error (${response.status})` };
+        }
+        
         if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
         throw new Error(errorData.error || 'Failed to initiate analysis');
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        const responseText = await response.text();
+        if (!responseText) {
+          throw new Error('Empty response from server');
+        }
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse response JSON:', parseError);
+        throw new Error('Invalid response from server. Please try again.');
+      }
       if (response.status === 202 && data.status === 'processing') {
         setReviewId(data.reviewId);
         setIsProcessing(true);
@@ -139,7 +161,18 @@ const DirectReportAnalysis: React.FC = () => {
       try {
         const response = await fetch(`/.netlify/functions/check-review-status?reviewId=${reviewId}`);
         if (!response.ok) throw new Error('Failed to check status');
-        const data = await response.json();
+        
+        let data;
+        try {
+          const responseText = await response.text();
+          if (!responseText) {
+            throw new Error('Empty response from server');
+          }
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse polling response:', parseError);
+          throw new Error('Invalid response from server');
+        }
 
         if (data.status === 'completed') {
           setResult(data.analysis);
@@ -154,6 +187,14 @@ const DirectReportAnalysis: React.FC = () => {
         }
       } catch (error) {
         console.error('Polling error:', error);
+        // Don't stop polling on single error, but limit retries
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('Invalid response') || errorMessage.includes('Empty response')) {
+          setError('Server communication error. Please try again.');
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        }
       }
     }, 5000); // Poll every 5 seconds
   };

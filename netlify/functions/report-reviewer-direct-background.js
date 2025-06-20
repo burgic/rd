@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+const openaiApiKey = process.env.OPENAI_API_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 exports.handler = async (event) => {
@@ -84,6 +85,11 @@ exports.handler = async (event) => {
 
 async function analyzeReportDirect(reportContent, reportTitle, reportType) {
   console.log('analyzeReportDirect called with content length:', reportContent.length);
+  
+  if (!openaiApiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+  
   try {
     const systemPrompt = 
     `You are an expert R&D tax-credits advisor specialising in HMRC compliance review. Your task is to analyse R&D reports and technical documentation against HMRC's strict criteria.
