@@ -27,7 +27,7 @@ const ReportForm: React.FC = () => {
 
     try {
       // Navigate to analysis page with the data
-      navigate('/direct-report-analysis', {
+      navigate('/report-analysis', {
         state: {
           reportTitle: reportTitle.trim(),
           reportType: reportType,
@@ -88,7 +88,7 @@ const ReportForm: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8 py-6">
-            <h1 className="text-3xl font-bold text-white">Direct Report Review</h1>
+            <h1 className="text-3xl font-bold text-white">Report Review</h1>
             <p className="text-purple-100 mt-2">
               Paste your R&D report content for comprehensive HMRC compliance analysis
             </p>
