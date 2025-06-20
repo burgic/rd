@@ -72,27 +72,11 @@ const OverviewPage: React.FC = () => {
       ]
     },
     {
-      title: 'Client Dashboard',
-      description: 'Access your complete client dashboard and profile',
-      icon: '📊',
-      actions: [
-        { label: 'Dashboard', path: '/client/client-dashboard', primary: true }
-      ]
-    },
-    {
       title: 'Documents',
       description: 'Upload and manage your R&D and financial documents',
       icon: '📄',
       actions: [
         { label: 'Manage Documents', path: '/client/documents', primary: true }
-      ]
-    },
-    {
-      title: 'AI Assistant',
-      description: 'Chat with AI for personalized R&D and financial guidance',
-      icon: '🤖',
-      actions: [
-        { label: 'Start Chat', path: '/chat/chat', primary: true }
       ]
     }
   ];
@@ -223,7 +207,7 @@ const OverviewPage: React.FC = () => {
                <div>
                  <h3 className="text-lg font-semibold text-gray-900 mb-3">New to R&D Tax Credits?</h3>
                  <p className="text-gray-600 mb-4">
-                   Start with our R&D assessment tool to evaluate your eligibility for tax credits. 
+                   Start with our R&D assessment tool to evaluate your clients eligibility for tax credits. 
                    Our AI-powered analysis will help identify qualifying activities and estimate potential value.
                  </p>
                  <button
@@ -252,7 +236,7 @@ const OverviewPage: React.FC = () => {
 
         {/* Footer */}
         <div className="mt-12 text-center text-gray-500">
-          <p>Need help? Contact your adviser or check our documentation for detailed guides.</p>
+          <p>Need help? Get in touch.</p>
         </div>
       </div>
     </div>
