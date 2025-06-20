@@ -73,7 +73,7 @@ const OverviewPage: React.FC = () => {
     },
     {
       title: 'Direct Report Review',
-      description: 'Paste report content directly for instant AI analysis against HMRC's 14-point compliance criteria',
+      description: 'Paste report content directly for instant AI analysis against HMRC\'s 14-point compliance criteria',
       icon: '🔍',
       actions: [
         { label: 'Analyze Report Text', path: '/direct-report-form', primary: true },
