@@ -56,7 +56,7 @@ const ReportAnalysis: React.FC = () => {
   useEffect(() => {
     // Early validation
     if (!reportData?.reportTitle || !reportData?.reportContent) {
-      navigate('/direct-report-form');
+      navigate('/report-form');
       return;
     }
 
@@ -221,7 +221,7 @@ const ReportAnalysis: React.FC = () => {
   };
 
   const handleNewAnalysis = () => {
-    navigate('/direct-report-form');
+    navigate('/report-form');
   };
 
   const handleViewHistory = () => {
@@ -292,7 +292,7 @@ const ReportAnalysis: React.FC = () => {
               onClick={() => {
                 requestMadeRef.current = false;
                 setError(null);
-                navigate('/direct-report-form');
+                navigate('/report-form');
               }}
               className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
             >

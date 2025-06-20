@@ -27,7 +27,7 @@ const ReportForm: React.FC = () => {
 
     try {
       // Navigate to analysis page with the data
-      navigate('/report-analysis', {
+      navigate('/direct-report-analysis', {
         state: {
           reportTitle: reportTitle.trim(),
           reportType: reportType,
