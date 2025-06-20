@@ -30,6 +30,10 @@ import './styles.css';
 import './styles/globals.css';
 import Chatbot from './components/Chat/Chat';
 import RiskAssessmentForm from 'components/Client/Risk/RiskAssessmentForm';
+import TranscriptForm from './components/CallTranscripts/TranscriptForm';
+import TranscriptAnalysis from './components/CallTranscripts/TranscriptAnalysis';
+import TranscriptHistory from './components/CallTranscripts/TranscriptHistory';
+import TranscriptViewer from './components/CallTranscripts/TranscriptViewer';
 import { Toaster } from 'react-hot-toast';
 
 
@@ -78,6 +82,41 @@ import { Toaster } from 'react-hot-toast';
                 </ProtectedRoute>
               } 
             />
+
+            {/* Call Transcript Analysis Routes */}
+            <Route 
+              path="/call-transcript-form" 
+              element={
+                <ProtectedRoute requiredRole="adviser">
+                  <TranscriptForm />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript-analysis" 
+              element={
+                <ProtectedRoute requiredRole="adviser">
+                  <TranscriptAnalysis />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript-history" 
+              element={
+                <ProtectedRoute requiredRole="adviser">
+                  <TranscriptHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/call-transcript/:analysisId" 
+              element={
+                <ProtectedRoute requiredRole="adviser">
+                  <TranscriptViewer />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="/adviser/adviser-dashboard" element={<ProtectedRoute requiredRole = "adviser"> <AdviserDashboard /> </ProtectedRoute>} />
             <Route path="/adviser/create-client" element={<ProtectedRoute requiredRole = "adviser"> <CreateClient /></ProtectedRoute>} />
             <Route
