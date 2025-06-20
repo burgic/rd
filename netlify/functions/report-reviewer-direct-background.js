@@ -129,7 +129,18 @@ exports.handler = async (event, context) => {
 
     // Parse request body
     logWithMetrics('Parsing request body');
-    const requestData = JSON.parse(event.body);
+    let requestData;
+    try {
+      requestData = JSON.parse(event.body);
+    } catch (parseError) {
+      logWithMetrics('Failed to parse request body', { error: parseError.message });
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' })
+      };
+    }
+
     const { userId, reportContent, reportTitle, reportType } = requestData;
 
     // Log request data size
@@ -223,27 +234,30 @@ exports.handler = async (event, context) => {
     }
 
     // Prepare response
-    const responseBody = {
+    const responseData = {
       analysis,
       reviewId,
       reportTitle,
       timestamp: new Date().toISOString()
     };
 
+    const responseBody = JSON.stringify(responseData);
     const totalDuration = Date.now() - startTime;
+    
     logWithMetrics('Function completed successfully', {
       totalDuration: `${totalDuration}ms`,
-      responseBodySize: JSON.stringify(responseBody).length,
+      responseBodySize: responseBody.length,
       hasAnalysis: !!analysis,
       overallScore: analysis?.overallScore,
       complianceScore: analysis?.complianceScore,
       hasChecklistFeedback: !!analysis?.checklistFeedback
     });
 
+    // CRITICAL FIX: Ensure proper response format
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(responseBody),
+      body: responseBody
     };
 
   } catch (error) {
@@ -256,13 +270,15 @@ exports.handler = async (event, context) => {
       stack: error.stack
     });
 
+    const errorResponseBody = JSON.stringify({ 
+      error: error.message || 'Failed to analyze report. Please try again.',
+      timestamp: new Date().toISOString()
+    });
+
     return { 
       statusCode: 500, 
       headers, 
-      body: JSON.stringify({ 
-        error: error.message || 'Failed to analyze report. Please try again.',
-        timestamp: new Date().toISOString()
-      }) 
+      body: errorResponseBody
     };
   }
 };

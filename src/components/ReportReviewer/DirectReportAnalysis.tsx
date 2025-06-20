@@ -78,81 +78,85 @@ const DirectReportAnalysis: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-
+    
         const abortController = new AbortController();
         abortControllerRef.current = abortController;
-
+    
         console.log('Sending request to report-reviewer-direct-background...');
-
+    
+        const requestBody = JSON.stringify({
+          userId: user?.id,
+          reportContent: reportData.reportContent,
+          reportTitle: reportData.reportTitle,
+          reportType: reportData.reportType
+        });
+    
+        console.log('Request body size:', requestBody.length);
+    
         const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.id,
-            reportContent: reportData.reportContent,
-            reportTitle: reportData.reportTitle,
-            reportType: reportData.reportType
-          }),
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: requestBody,
           signal: abortController.signal
         });
-
+    
         if (abortController.signal.aborted) return;
-
+    
         console.log('Response status:', response.status);
         console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
+    
+        // Read the response text first
+        const responseText = await response.text();
+        console.log('Response text length:', responseText.length);
+        console.log('Response text preview:', responseText.substring(0, 200));
+    
         if (!response.ok) {
           let errorData;
           try {
-            const responseText = await response.text();
-            console.log('Error response text:', responseText);
-            console.log('Error response length:', responseText.length);
-            if (responseText) {
+            if (responseText && responseText.trim()) {
               errorData = JSON.parse(responseText);
             } else {
-              errorData = { error: 'Empty response from server' };
+              errorData = { error: 'Empty error response from server' };
             }
-          } catch (parseError: unknown) {
+          } catch (parseError) {
             console.error('Failed to parse error response:', parseError);
-            errorData = { error: `Server error (${response.status})` };
+            errorData = { error: `Server error (${response.status}): ${responseText || 'No response body'}` };
           }
           
           if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
-          throw new Error(errorData.error || 'Failed to analyze report');
+          throw new Error(errorData.error || `Server error (${response.status})`);
         }
-
+    
+        // Parse the success response
         let data;
         try {
-          const responseText = await response.text();
-          console.log('Success response length:', responseText.length);
-          console.log('Success response preview:', responseText.substring(0, 200));
-          
-          if (!responseText) {
+          if (!responseText || responseText.trim() === '') {
             throw new Error('Empty response from server');
-          }
-          if (responseText.trim() === '') {
-            throw new Error('Response contains only whitespace');
           }
           
           data = JSON.parse(responseText);
           console.log('Parsed response data keys:', Object.keys(data));
           console.log('Has analysis:', !!data.analysis);
-        } catch (parseError: unknown) {
-          console.error('Failed to parse response JSON:', parseError);
-          const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-          console.error('Parse error details:', errorMessage);
-          throw new Error('Invalid response from server. Please try again.');
+          
+          if (!data.analysis) {
+            throw new Error('Response missing analysis data');
+          }
+          
+        } catch (parseError) {
+          console.error('Failed to parse success response JSON:', parseError);
+          console.error('Response text that failed to parse:', responseText);
+          throw new Error('Invalid response format from server. Please try again.');
         }
-
-        if (data.analysis) {
-          setResult(data.analysis);
-          setReviewId(data.reviewId);
-          setLoading(false);
-        } else {
-          throw new Error('Invalid response format: missing analysis data');
-        }
-
-      } catch (error: unknown) {
+    
+        // Success - set the results
+        setResult(data.analysis);
+        setReviewId(data.reviewId);
+        setLoading(false);
+    
+      } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return;
         console.error('Analysis error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to analyze report';
@@ -162,19 +166,8 @@ const DirectReportAnalysis: React.FC = () => {
       }
     };
 
+    // Execute the analysis
     performAnalysis();
-
-    // Cleanup function
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        console.log('Aborted direct report analysis request due to component unmount');
-      }
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []); // Empty dependency array since we only want this to run once
 
   const startPolling = (reviewId: string) => {
     pollingIntervalRef.current = setInterval(async () => {
