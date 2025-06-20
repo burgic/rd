@@ -98,7 +98,7 @@ const ReportAnalysis: React.FC = () => {
       setError('User not authenticated');
       return;
     }
-    
+
     try {
       setAnalyzing(true);
       setError(null);
@@ -137,7 +137,20 @@ const ReportAnalysis: React.FC = () => {
         throw new Error('Failed to analyze report');
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse success response JSON:', parseError);
+        console.log('Response text that failed to parse:', responseText);
+        throw new Error('Invalid response format from server. Please try again.');
+      }
       
       // Parse the AI response into structured data
       const parsedResult = parseAIResponse(data.response || data);

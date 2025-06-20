@@ -93,7 +93,7 @@ const Navbar: React.FC = () => {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link to="/direct-report-form" className="navbar-link">
+                <Link to="/report-form" className="navbar-link">
                   Direct Report Review
                 </Link>
               </li>

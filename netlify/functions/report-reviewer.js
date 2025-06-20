@@ -33,32 +33,32 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { userId, query, companyName, companyDescription } = JSON.parse(event.body);
+    const { userId, reportContent, fileName, reportType, documentId } = JSON.parse(event.body);
 
-    console.log('R&D Assessment request:', { userId, companyName, hasQuery: !!query, hasDescription: !!companyDescription });
+    console.log('Report Review request:', { userId, fileName, reportType, hasContent: !!reportContent, documentId });
 
-    if (!userId || !query || !companyName || !companyDescription) {
+    if (!userId || !reportContent || !fileName) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Missing required fields: userId, query, companyName, companyDescription' 
+          error: 'Missing required fields: userId, reportContent, fileName' 
         }),
       };
     }
 
-    // Simplified rate limiting - just prevent obvious abuse (10 requests per minute)
+    // Simplified rate limiting - prevent abuse (5 reports per minute)
     const now = Date.now();
     if (rateLimitMap.has(userId)) {
       const { lastRequest, requestCount } = rateLimitMap.get(userId);
 
       if (now - lastRequest < 60000) { // 1-minute window
-        if (requestCount >= 10) { // Liberal limit for legitimate use
+        if (requestCount >= 5) {
           return {
             statusCode: 429,
             headers,
             body: JSON.stringify({ 
-              error: 'Too many requests. Please wait a minute before submitting more assessments.' 
+              error: 'Too many requests. Please wait a minute before submitting more reports.' 
             }),
           };
         }
@@ -70,35 +70,37 @@ exports.handler = async (event) => {
       rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
     }
 
-    // Note: User authentication is handled at the frontend level
-    // We don't need to verify the user profile here, just process the request
+    // Generate report review using OpenAI
+    const aiResponse = await reviewReport(reportContent, fileName, reportType);
 
-    // Generate R&D assessment using OpenAI
-    const aiResponse = await generateRDAssessment(query, companyName, companyDescription);
+    // Generate a unique review ID
+    const reviewId = `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({ 
         response: aiResponse,
-        companyName,
+        reviewId,
+        fileName,
+        reportType,
         timestamp: new Date().toISOString()
       }),
     };
 
   } catch (error) {
-    console.error('Error processing R&D assessment request:', error);
+    console.error('Error processing report review request:', error);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: 'Failed to process R&D assessment. Please try again.' 
+        error: 'Failed to process report review. Please try again.' 
       }),
     };
   }
 };
 
-async function reviewReport(prompt, companyName, companyDescription) {
+async function reviewReport(reportContent, fileName, reportType) {
   try {
     const systemPrompt = 
     `You are an expert R&D tax-credits advisor specialising in HMRC compliance review. Your task is to analyse R&D reports and technical documentation against HMRC's strict criteria.
@@ -152,7 +154,7 @@ async function reviewReport(prompt, companyName, companyDescription) {
         • Review the report, consider against what else you know and have found, similarities with others, different approaches and ways of thinking and make these suggestions.
 
     **ANALYSIS REQUIREMENTS**
-    Analyze the report: "${reportTitle}" and provide:
+    Analyze the report: "${fileName}" (Type: ${reportType}) and provide:
 
     1. **Overall Assessment** (0-100 score)
     2. **HMRC Compliance Score** (0-100)
@@ -202,7 +204,7 @@ async function reviewReport(prompt, companyName, companyDescription) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: "system",
@@ -210,11 +212,11 @@ async function reviewReport(prompt, companyName, companyDescription) {
           },
           {
             role: 'user',
-            content: prompt
+            content: `Report Content:\n\n${reportContent}`
           }
         ],
-        max_tokens: 1500,
-        temperature: 0.7,
+        max_tokens: 2000,
+        temperature: 0.3,
       }),
     });
 
@@ -237,19 +239,29 @@ async function reviewReport(prompt, companyName, companyDescription) {
     
     // Fallback response if OpenAI fails
     return JSON.stringify({
-      eligibilityScore: 50,
-      eligible: false,
-      reasoning: `Unable to complete automated assessment at this time. The company description for ${companyName} has been received, but our AI assessment service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for a manual assessment.`,
+      overallScore: 50,
+      complianceScore: 40,
+      checklistFeedback: {
+        advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Unable to complete automated analysis"]},
+        uncertainty: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Analysis service temporarily unavailable"]},
+        professionals: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Manual review required"]},
+        process: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Automated analysis failed"]},
+        aifAlignment: {"score": 50, "strengths": ["Report uploaded"], "weaknesses": ["Service temporarily unavailable"]},
+        costs: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Unable to analyze costs automatically"]},
+        payeCap: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Manual calculation required"]},
+        grants: {"score": 50, "strengths": ["Content available"], "weaknesses": ["Analysis service down"]},
+        ct600: {"score": 50, "strengths": ["Document submitted"], "weaknesses": ["Unable to verify consistency"]},
+        evidence: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["Manual evidence review needed"]},
+        conduct: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Professional review required"]},
+        fraudTribunal: {"score": 50, "strengths": ["Content uploaded"], "weaknesses": ["Unable to assess tribunal compliance"]},
+        esoteric: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Expert manual review recommended"]}
+      },
       recommendations: [
-        "Retry the assessment in a few minutes",
-        "Ensure your company description includes specific technical challenges and innovations"
+        "Retry the analysis in a few minutes",
+        "Contact a qualified R&D tax advisor for manual review",
+        "Ensure the report includes all required HMRC compliance elements"
       ],
-      nextSteps: [
-        "Review HMRC's R&D tax credits guidelines",
-        "Document your technical processes and innovations",
-        "Consult with a specialist R&D tax advisor"
-      ],
-      estimatedValue: "Contact advisor for estimate"
+      detailedFeedback: `Unable to complete automated assessment of ${fileName} at this time. The report content has been received, but our AI assessment service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for a comprehensive manual review. The report should be reviewed against all 14 HMRC compliance criteria for R&D tax credits.`
     });
   }
-} 
+}
