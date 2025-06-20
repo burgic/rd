@@ -205,24 +205,14 @@ ${getImprovements(analysis).map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
 
 HMRC COMPLIANCE BREAKDOWN
 ========================
-Project Scope: ${analysis.hmrcCompliance.projectScope.score}/100
-- ${analysis.hmrcCompliance.projectScope.feedback}
-
-Technical Advance: ${analysis.hmrcCompliance.technicalAdvance.score}/100
-- ${analysis.hmrcCompliance.technicalAdvance.feedback}
-
-Uncertainty: ${analysis.hmrcCompliance.uncertainty.score}/100
-- ${analysis.hmrcCompliance.uncertainty.feedback}
-
-Documentation: ${analysis.hmrcCompliance.documentation.score}/100
-- ${analysis.hmrcCompliance.documentation.feedback}
-
-Eligibility: ${analysis.hmrcCompliance.eligibility.score}/100
-- ${analysis.hmrcCompliance.eligibility.feedback}
+${Object.entries(getHmrcCompliance(analysis)).map(([key, value]) => 
+`${key.replace(/([A-Z])/g, ' $1').trim()}: ${value.score}/100
+- ${value.feedback}`
+).join('\n\n')}
 
 RECOMMENDATIONS
 ===============
-${analysis.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+${(analysis.recommendations || []).map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
 DETAILED FEEDBACK
 =================
