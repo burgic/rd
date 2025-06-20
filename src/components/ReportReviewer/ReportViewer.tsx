@@ -23,16 +23,10 @@ interface ReportReview {
   content_preview: string;
   overall_score: number;
   compliance_score: number;
-  strengths: string[];
-  improvements: string[];
-  hmrc_compliance: {
-    projectScope: { score: number; feedback: string };
-    technicalAdvance: { score: number; feedback: string };
-    uncertainty: { score: number; feedback: string };
-    documentation: { score: number; feedback: string };
-    eligibility: { score: number; feedback: string };
-  };
-  recommendations: string[];
+  strengths: string[] | string; // Can be array or JSON string
+  improvements: string[] | string; // Can be array or JSON string
+  hmrc_compliance: any; // Can be different formats
+  recommendations: string[] | string; // Can be array or JSON string
   detailed_feedback: string;
   created_at: string;
 }
@@ -120,6 +114,46 @@ const ReportViewer: React.FC = () => {
     return types[type] || type;
   };
 
+  // Helper functions to safely parse JSON strings or return arrays
+  const parseStrengths = (strengths: string[] | string): string[] => {
+    if (Array.isArray(strengths)) return strengths;
+    try {
+      const parsed = JSON.parse(strengths);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const parseImprovements = (improvements: string[] | string): string[] => {
+    if (Array.isArray(improvements)) return improvements;
+    try {
+      const parsed = JSON.parse(improvements);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const parseRecommendations = (recommendations: string[] | string): string[] => {
+    if (Array.isArray(recommendations)) return recommendations;
+    try {
+      const parsed = JSON.parse(recommendations);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const parseHmrcCompliance = (hmrcCompliance: any) => {
+    // If it's already an object with the expected structure, return it
+    if (hmrcCompliance && typeof hmrcCompliance === 'object' && !Array.isArray(hmrcCompliance)) {
+      return hmrcCompliance;
+    }
+    // Return empty object if parsing fails
+    return {};
+  };
+
   const downloadReport = () => {
     if (!review) return;
 
@@ -138,32 +172,22 @@ HMRC Compliance Score: ${review.compliance_score}/100
 
 STRENGTHS
 =========
-${review.strengths.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+${parseStrengths(review.strengths).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 AREAS FOR IMPROVEMENT
 ====================
-${review.improvements.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
+${parseImprovements(review.improvements).map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
 
 HMRC COMPLIANCE BREAKDOWN
 ========================
-Project Scope: ${review.hmrc_compliance.projectScope.score}/100
-- ${review.hmrc_compliance.projectScope.feedback}
-
-Technical Advance: ${review.hmrc_compliance.technicalAdvance.score}/100
-- ${review.hmrc_compliance.technicalAdvance.feedback}
-
-Uncertainty: ${review.hmrc_compliance.uncertainty.score}/100
-- ${review.hmrc_compliance.uncertainty.feedback}
-
-Documentation: ${review.hmrc_compliance.documentation.score}/100
-- ${review.hmrc_compliance.documentation.feedback}
-
-Eligibility: ${review.hmrc_compliance.eligibility.score}/100
-- ${review.hmrc_compliance.eligibility.feedback}
+${Object.entries(parseHmrcCompliance(review.hmrc_compliance)).map(([key, value]) => 
+`${key.replace(/([A-Z])/g, ' $1').trim()}: ${(value as any)?.score || 0}/100
+- ${(value as any)?.feedback || 'No feedback available'}`
+).join('\n\n')}
 
 RECOMMENDATIONS
 ===============
-${review.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+${parseRecommendations(review.recommendations).map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
 DETAILED FEEDBACK
 =================
@@ -355,7 +379,7 @@ ${review.detailed_feedback}
                 <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
               </div>
               <ul className="space-y-3">
-                {review.strengths.map((strength, index) => (
+                {parseStrengths(review.strengths).map((strength, index) => (
                   <li key={index} className="flex items-start space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">{strength}</span>
@@ -370,7 +394,7 @@ ${review.detailed_feedback}
                 <h3 className="text-lg font-semibold text-gray-900">Areas for Improvement</h3>
               </div>
               <ul className="space-y-3">
-                {review.improvements.map((improvement, index) => (
+                {parseImprovements(review.improvements).map((improvement, index) => (
                   <li key={index} className="flex items-start space-x-3">
                     <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
                     <span className="text-gray-700">{improvement}</span>
@@ -387,17 +411,17 @@ ${review.detailed_feedback}
               <h3 className="text-lg font-semibold text-gray-900">HMRC Compliance Breakdown</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(review.hmrc_compliance).map(([key, value]) => (
-                <div key={key} className={`p-4 rounded-lg ${getScoreBgColor(value.score)}`}>
+              {Object.entries(parseHmrcCompliance(review.hmrc_compliance)).map(([key, value]) => (
+                <div key={key} className={`p-4 rounded-lg ${getScoreBgColor((value as any)?.score || 0)}`}>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-gray-900 capitalize">
                       {key.replace(/([A-Z])/g, ' $1').trim()}
                     </h4>
-                    <span className={`font-bold ${getScoreColor(value.score)}`}>
-                      {value.score}
+                    <span className={`font-bold ${getScoreColor((value as any)?.score || 0)}`}>
+                      {(value as any)?.score || 0}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">{value.feedback}</p>
+                  <p className="text-sm text-gray-600">{(value as any)?.feedback || 'No feedback available'}</p>
                 </div>
               ))}
             </div>
@@ -407,7 +431,7 @@ ${review.detailed_feedback}
           <div className="bg-white shadow-sm rounded-lg p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Recommendations</h3>
             <ul className="space-y-3">
-              {review.recommendations.map((recommendation, index) => (
+              {parseRecommendations(review.recommendations).map((recommendation, index) => (
                 <li key={index} className="flex items-start space-x-3">
                   <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-blue-600">{index + 1}</span>
