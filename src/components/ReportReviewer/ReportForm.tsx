@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const DirectReportForm: React.FC = () => {
+const ReportForm: React.FC = () => {
   const navigate = useNavigate();
   const [reportTitle, setReportTitle] = useState('');
   const [reportType, setReportType] = useState('rd_report');
@@ -253,4 +253,4 @@ const DirectReportForm: React.FC = () => {
   );
 };
 
-export default DirectReportForm; 
+export default ReportForm; 

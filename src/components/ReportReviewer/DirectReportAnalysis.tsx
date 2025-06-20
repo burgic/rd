@@ -38,7 +38,7 @@ interface AnalysisResult {
   detailedFeedback: string;
 }
 
-const DirectReportAnalysis: React.FC = () => {
+const ReportAnalysis: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
@@ -441,4 +441,4 @@ const DirectReportAnalysis: React.FC = () => {
   );
 };
 
-export default DirectReportAnalysis;
+export default ReportAnalysis;
