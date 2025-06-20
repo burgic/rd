@@ -66,7 +66,7 @@ const TranscriptHistory: React.FC = () => {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click when deleting
     
-    if (!confirm('Are you sure you want to delete this call analysis?')) {
+    if (!window.confirm('Are you sure you want to delete this call analysis?')) {
       return;
     }
 
