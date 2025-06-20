@@ -71,7 +71,7 @@ const ReportAnalysis: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch('/.netlify/functions/report-reviewer', {
+      const response = await fetch('/.netlify/functions/report-reviewer-background', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
