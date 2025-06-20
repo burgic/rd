@@ -168,6 +168,7 @@ const DirectReportAnalysis: React.FC = () => {
 
     // Execute the analysis
     performAnalysis();
+  }, [reportData, user, navigate]);
 
   const startPolling = (reviewId: string) => {
     pollingIntervalRef.current = setInterval(async () => {
