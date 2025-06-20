@@ -27,14 +27,18 @@ interface ReportAnalysisData {
 interface AnalysisResult {
   overallScore: number;
   complianceScore: number;
-  strengths: string[];
-  improvements: string[];
-  hmrcCompliance: {
-    projectScope: { score: number; feedback: string };
-    technicalAdvance: { score: number; feedback: string };
-    uncertainty: { score: number; feedback: string };
-    documentation: { score: number; feedback: string };
-    eligibility: { score: number; feedback: string };
+  checklistFeedback?: {
+    [key: string]: {
+      score: number;
+      strengths: string[];
+      weaknesses: string[];
+    };
+  };
+  // Legacy format support
+  strengths?: string[];
+  improvements?: string[];
+  hmrcCompliance?: {
+    [key: string]: { score: number; feedback: string };
   };
   recommendations: string[];
   detailedFeedback: string;
@@ -61,7 +65,7 @@ const ReportAnalysis: React.FC = () => {
   }, [reportData, user, navigate]);
 
   const analyzeReport = async () => {
-    if (!reportData || !user) return;
+    if (!reportData || !user || analyzing) return; // Prevent duplicate requests
 
     setAnalyzing(true);
     setError(null);
@@ -141,6 +145,40 @@ const ReportAnalysis: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Helper functions to extract data from new API format
+  const getStrengths = (analysis: AnalysisResult): string[] => {
+    if (analysis.strengths) return analysis.strengths;
+    if (analysis.checklistFeedback) {
+      return Object.values(analysis.checklistFeedback)
+        .flatMap(item => item.strengths || []);
+    }
+    return [];
+  };
+
+  const getImprovements = (analysis: AnalysisResult): string[] => {
+    if (analysis.improvements) return analysis.improvements;
+    if (analysis.checklistFeedback) {
+      return Object.values(analysis.checklistFeedback)
+        .flatMap(item => item.weaknesses || []);
+    }
+    return [];
+  };
+
+  const getHmrcCompliance = (analysis: AnalysisResult) => {
+    if (analysis.hmrcCompliance) return analysis.hmrcCompliance;
+    if (analysis.checklistFeedback) {
+      const compliance: { [key: string]: { score: number; feedback: string } } = {};
+      Object.entries(analysis.checklistFeedback).forEach(([key, value]) => {
+        compliance[key] = {
+          score: value.score,
+          feedback: `Strengths: ${value.strengths.join(', ')}. Weaknesses: ${value.weaknesses.join(', ')}`
+        };
+      });
+      return compliance;
+    }
+    return {};
+  };
+
   const downloadReport = () => {
     if (!analysis) return;
 
@@ -159,11 +197,11 @@ HMRC Compliance Score: ${analysis.complianceScore}/100
 
 STRENGTHS
 =========
-${analysis.strengths.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+${getStrengths(analysis).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 AREAS FOR IMPROVEMENT
 ====================
-${analysis.improvements.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
+${getImprovements(analysis).map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
 
 HMRC COMPLIANCE BREAKDOWN
 ========================
@@ -349,7 +387,7 @@ ${analysis.detailedFeedback}
                   <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
                 </div>
                 <ul className="space-y-3">
-                  {analysis.strengths.map((strength, index) => (
+                  {getStrengths(analysis).map((strength, index) => (
                     <li key={index} className="flex items-start space-x-3">
                       <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
                       <span className="text-gray-700">{strength}</span>
@@ -364,7 +402,7 @@ ${analysis.detailedFeedback}
                   <h3 className="text-lg font-semibold text-gray-900">Areas for Improvement</h3>
                 </div>
                 <ul className="space-y-3">
-                  {analysis.improvements.map((improvement, index) => (
+                  {getImprovements(analysis).map((improvement, index) => (
                     <li key={index} className="flex items-start space-x-3">
                       <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
                       <span className="text-gray-700">{improvement}</span>
@@ -381,7 +419,7 @@ ${analysis.detailedFeedback}
                 <h3 className="text-lg font-semibold text-gray-900">HMRC Compliance Breakdown</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(analysis.hmrcCompliance).map(([key, value]) => (
+                {Object.entries(getHmrcCompliance(analysis)).map(([key, value]) => (
                   <div key={key} className={`p-4 rounded-lg ${getScoreBgColor(value.score)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-gray-900 capitalize">
@@ -401,7 +439,7 @@ ${analysis.detailedFeedback}
             <div className="bg-white shadow-sm rounded-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Recommendations</h3>
               <ul className="space-y-3">
-                {analysis.recommendations.map((recommendation, index) => (
+                {(analysis.recommendations || []).map((recommendation, index) => (
                   <li key={index} className="flex items-start space-x-3">
                     <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                       <span className="text-sm font-medium text-blue-600">{index + 1}</span>
