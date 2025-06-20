@@ -1,4 +1,4 @@
-const { createClient } = require('@supabase/supabase-js');
+let reviewId = null;const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -60,51 +60,15 @@ exports.handler = async (event) => {
       };
     }
 
-    // Rate limiting - prevent abuse (5 requests per minute)
-    const now = Date.now();
-    if (rateLimitMap.has(userId)) {
-      const { lastRequest, requestCount } = rateLimitMap.get(userId);
-
-      if (now - lastRequest < 60000) { // 1-minute window
-        if (requestCount >= 5) {
-          return {
-            statusCode: 429,
-            headers,
-            body: JSON.stringify({ 
-              error: 'Too many requests. Please wait a minute before submitting more reports.' 
-            }),
-          };
-        }
-        rateLimitMap.set(userId, { lastRequest: now, requestCount: requestCount + 1 });
-      } else {
-        rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
-      }
-    } else {
-      rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
-    }
-
-    // Generate analysis using OpenAI
-    console.log('Starting OpenAI analysis...');
-    const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
-    console.log('OpenAI analysis completed:', {
-      hasAnalysis: !!analysis,
-      overallScore: analysis?.overallScore,
-      complianceScore: analysis?.complianceScore
-    });
-
-    // Save to database
+    // Save pending record (analysis will be updated later)
     const pendingRecord = {
       user_id: userId,
       file_name: reportTitle,
       report_type: reportType || 'rd_report',
       content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
-      overall_score: analysis.overallScore,
-      compliance_score: analysis.complianceScore,
-      strengths: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].strengths || []).flat()),
-      improvements: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].weaknesses || []).flat()),
-      hmrc_compliance: analysis.checklistFeedback || {},
-      recommendations: analysis.recommendations || [],
-      detailed_feedback: analysis.detailedFeedback
+      overall_score: null, // Will be updated after analysis
+      compliance_score: null,
+      detailed_feedback: 'Analysis in progress...'
     };
 
     const { data: savedRecord, error: saveError } = await supabase
@@ -115,31 +79,60 @@ exports.handler = async (event) => {
 
     if (saveError) {
       console.error('Supabase save error:', saveError);
-      console.error('Pending record:', pendingRecord);
-      // Don't fail the request if database save fails, still return analysis
-      console.warn('Database save failed, returning analysis without saving');
+      throw new Error(`Database error: ${saveError.message || 'Failed to initiate analysis'}`);
     }
 
-    const responseBody = {
-      analysis,
-      reviewId: savedRecord?.id || null,
-      reportTitle,
-      timestamp: new Date().toISOString()
+    // Return immediate response (202 = processing)
+    const immediateResponse = {
+      statusCode: 202,
+      headers,
+      body: JSON.stringify({ 
+        status: 'processing', 
+        reviewId: savedRecord.id,
+        message: 'Analysis started in background'
+      })
     };
 
-    console.log('Returning response with analysis:', {
-      hasAnalysis: !!analysis,
-      overallScore: analysis?.overallScore,
-      complianceScore: analysis?.complianceScore,
-      hasChecklistFeedback: !!analysis?.checklistFeedback,
-      responseBodySize: JSON.stringify(responseBody).length
+    // Process analysis in background
+    setImmediate(async () => {
+      try {
+        console.log('Starting background analysis...');
+        const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
+        
+        const updateData = {
+          overall_score: analysis.overallScore,
+          compliance_score: analysis.complianceScore,
+          strengths: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].strengths || []).flat()),
+          improvements: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].weaknesses || []).flat()),
+          hmrc_compliance: analysis.checklistFeedback || {},
+          recommendations: analysis.recommendations || [],
+          detailed_feedback: analysis.detailedFeedback
+        };
+
+        const { error: updateError } = await supabase
+          .from('report_reviews')
+          .update(updateData)
+          .eq('id', savedRecord.id);
+
+        if (updateError) {
+          console.error('Failed to update analysis results:', updateError);
+          await supabase
+            .from('report_reviews')
+            .update({ detailed_feedback: 'Analysis completed but failed to save results' })
+            .eq('id', savedRecord.id);
+        } else {
+          console.log('Background analysis completed successfully');
+        }
+      } catch (error) {
+        console.error('Background analysis failed:', error);
+        await supabase
+          .from('report_reviews')
+          .update({ detailed_feedback: `Analysis failed: ${error.message || 'Unknown error'}` })
+          .eq('id', savedRecord.id);
+      }
     });
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify(responseBody),
-    };
+    return immediateResponse;
 
   } catch (error) {
     console.error('Error in report analysis function:', error);
@@ -288,7 +281,7 @@ async function analyzeReportDirect(reportContent, reportTitle, reportType) {
         temperature: 0.3,
         response_format: { type: "json_object" }
       }),
-      signal: AbortSignal.timeout(25000) // 25 second timeout
+      signal: AbortSignal.timeout(45000) // Increased for background function
     });
 
     console.log('OpenAI API response status:', response.status);

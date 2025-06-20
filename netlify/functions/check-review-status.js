@@ -12,52 +12,99 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers };
-  if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers };
+  }
 
-  const { reviewId } = event.queryStringParameters || {};
-
-  if (!reviewId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing reviewId' }) };
+  if (event.httpMethod !== 'GET') {
+    return { 
+      statusCode: 405, 
+      headers, 
+      body: JSON.stringify({ error: 'Method not allowed' }) 
+    };
+  }
 
   try {
-    const { data, error } = await supabase
+    const reviewId = event.queryStringParameters?.reviewId;
+    
+    if (!reviewId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Missing reviewId parameter' })
+      };
+    }
+
+    console.log('Checking status for review:', reviewId);
+
+    const { data: review, error } = await supabase
       .from('report_reviews')
       .select('*')
       .eq('id', reviewId)
       .single();
 
-    if (error || !data) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Review not found' }) };
+    if (error) {
+      console.error('Database error:', error);
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ error: 'Review not found' })
+      };
+    }
 
-    // Determine status based on analysis completion
-    const isAnalysisComplete = data.overall_score !== null && data.compliance_score !== null;
-    const isError = data.detailed_feedback && data.detailed_feedback.startsWith('Analysis failed:');
+    // Check if analysis is complete
+    const isComplete = review.overall_score !== null && review.compliance_score !== null;
+    const isError = review.detailed_feedback && review.detailed_feedback.startsWith('Analysis failed:');
 
     if (isError) {
-      return { statusCode: 500, headers, body: JSON.stringify({ status: 'error', message: data.detailed_feedback || 'Analysis failed' }) };
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'error',
+          message: review.detailed_feedback
+        })
+      };
     }
 
-    if (!isAnalysisComplete) {
-      return { statusCode: 202, headers, body: JSON.stringify({ status: 'processing', reviewId }) };
+    if (isComplete) {
+      // Build analysis object from database
+      const analysis = {
+        overallScore: review.overall_score,
+        complianceScore: review.compliance_score,
+        checklistFeedback: review.hmrc_compliance || {},
+        recommendations: review.recommendations || [],
+        detailedFeedback: review.detailed_feedback
+      };
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'completed',
+          analysis,
+          reviewId: review.id,
+          reportTitle: review.file_name,
+          timestamp: review.created_at
+        })
+      };
+    } else {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          status: 'processing',
+          message: 'Analysis still in progress...'
+        })
+      };
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        status: 'completed',
-        analysis: {
-          overallScore: data.overall_score,
-          complianceScore: data.compliance_score,
-          checklistFeedback: data.hmrc_compliance,
-          recommendations: data.recommendations,
-          detailedFeedback: data.detailed_feedback
-        },
-        reviewId: data.id,
-        timestamp: data.created_at
-      })
-    };
   } catch (error) {
-    console.error('Error checking review status:', error);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to check status' }) };
+    console.error('Status check error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to check status' })
+    };
   }
 };

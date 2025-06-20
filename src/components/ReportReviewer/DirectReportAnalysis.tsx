@@ -46,6 +46,8 @@ const DirectReportAnalysis: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const requestMadeRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -82,7 +84,7 @@ const DirectReportAnalysis: React.FC = () => {
 
         console.log('Sending request to report-reviewer-direct-background...');
 
-        const response = await fetch('/.netlify/functions/minimal-report-reviewer', {
+        const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -142,12 +144,17 @@ const DirectReportAnalysis: React.FC = () => {
           throw new Error('Invalid response from server. Please try again.');
         }
 
-        if (data.analysis) {
+        if (response.status === 202 && data.status === 'processing') {
+          setReviewId(data.reviewId);
+          setIsProcessing(true);
+          startPolling(data.reviewId);
+        } else if (data.analysis) {
+          // Direct response (fallback)
           setResult(data.analysis);
           setReviewId(data.reviewId);
           setLoading(false);
         } else {
-          throw new Error('Invalid response format: missing analysis data');
+          throw new Error('Invalid response format: unexpected response structure');
         }
 
       } catch (error: unknown) {
@@ -168,8 +175,61 @@ const DirectReportAnalysis: React.FC = () => {
         abortControllerRef.current.abort();
         console.log('Aborted direct report analysis request due to component unmount');
       }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
     };
   }, []); // Empty dependency array since we only want this to run once
+
+  const startPolling = (reviewId: string) => {
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/.netlify/functions/check-review-status?reviewId=${reviewId}`);
+        if (!response.ok) throw new Error('Failed to check status');
+        
+        let data;
+        try {
+          const responseText = await response.text();
+          if (!responseText) {
+            throw new Error('Empty response from server');
+          }
+          data = JSON.parse(responseText);
+        } catch (parseError: unknown) {
+          console.error('Failed to parse polling response:', parseError);
+          throw new Error('Invalid response from server');
+        }
+
+        if (data.status === 'completed') {
+          setResult(data.analysis);
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        } else if (data.status === 'error') {
+          setError(data.message || 'Analysis failed');
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        // Don't stop polling on single error, but limit retries
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('Invalid response') || errorMessage.includes('Empty response')) {
+          setError('Server communication error. Please try again.');
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        }
+      }
+    }, 3000); // Poll every 3 seconds
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
 
   const handleNewAnalysis = () => {
     navigate('/direct-report-form');
@@ -209,18 +269,21 @@ const DirectReportAnalysis: React.FC = () => {
     esoteric: 'Esoteric Analysis'
   };
 
-  if (loading) {
+  if (loading || isProcessing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Analyzing Your Report
+              {isProcessing ? 'Processing Your Report' : 'Initiating Analysis'}
             </h2>
             <p className="text-gray-600">
-              Our AI is analyzing your report against HMRC compliance requirements...
+              {isProcessing ? 'Our AI is analyzing your report. This may take up to 60 seconds.' : 'Preparing your report for analysis...'}
             </p>
+            {reviewId && (
+              <p className="text-sm text-gray-500 mt-2">Review ID: {reviewId}</p>
+            )}
           </div>
         </div>
       </div>
@@ -378,9 +441,11 @@ const DirectReportAnalysis: React.FC = () => {
               </svg>
             </div>
             <div>
-              <h4 className="font-semibold text-yellow-800">Review Required</h4>
+              <h4 className="font-semibold text-yellow-800">Professional Review Required</h4>
               <p className="text-yellow-700 mt-1">
-                This AI analysis is for guidance only.
+                This AI analysis is for guidance only and should not replace professional tax advice. 
+                R&D tax credit compliance is complex and requires expert review. Always consult with a 
+                qualified R&D tax advisor before finalizing any claims or submissions to HMRC.
               </p>
             </div>
           </div>
