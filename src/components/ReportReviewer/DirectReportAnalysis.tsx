@@ -144,17 +144,12 @@ const DirectReportAnalysis: React.FC = () => {
           throw new Error('Invalid response from server. Please try again.');
         }
 
-        if (response.status === 202 && data.status === 'processing') {
-          setReviewId(data.reviewId);
-          setIsProcessing(true);
-          startPolling(data.reviewId);
-        } else if (data.analysis) {
-          // Direct response (fallback)
+        if (data.analysis) {
           setResult(data.analysis);
           setReviewId(data.reviewId);
           setLoading(false);
         } else {
-          throw new Error('Invalid response format: unexpected response structure');
+          throw new Error('Invalid response format: missing analysis data');
         }
 
       } catch (error: unknown) {
@@ -269,21 +264,18 @@ const DirectReportAnalysis: React.FC = () => {
     esoteric: 'Esoteric Analysis'
   };
 
-  if (loading || isProcessing) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {isProcessing ? 'Processing Your Report' : 'Initiating Analysis'}
+              Analyzing Your Report
             </h2>
             <p className="text-gray-600">
-              {isProcessing ? 'Our AI is analyzing your report. This may take up to 60 seconds.' : 'Preparing your report for analysis...'}
+              Our AI is analyzing your report against HMRC compliance requirements...
             </p>
-            {reviewId && (
-              <p className="text-sm text-gray-500 mt-2">Review ID: {reviewId}</p>
-            )}
           </div>
         </div>
       </div>
