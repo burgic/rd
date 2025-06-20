@@ -82,7 +82,7 @@ const DirectReportAnalysis: React.FC = () => {
 
         console.log('Sending request to report-reviewer-direct-background...');
 
-        const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
+        const response = await fetch('/.netlify/functions/test-report-reviewer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
