@@ -63,36 +63,25 @@ const OverviewPage: React.FC = () => {
       ]
     },
     {
-      title: 'Financial Profile',
-      description: 'Manage your income, expenditure, assets, and liabilities',
-      icon: '💰',
+      title: 'Call Transcript Analysis',
+      description: 'AI-powered analysis of client calls to extract R&D insights',
+      icon: '📞',
       actions: [
-        { label: 'Dashboard', path: '/client/client-dashboard', primary: true },
-        { label: 'Income', path: '/client/income' },
-        { label: 'Expenditure', path: '/client/expenditure' },
-        { label: 'Assets', path: '/client/assets' },
-        { label: 'Liabilities', path: '/client/liabilities' }
+        { label: 'Analyze New Call', path: '/call-transcript-form', primary: true },
+        { label: 'Call History', path: '/call-transcript-history' }
       ]
     },
     {
-      title: 'Risk Assessment',
-      description: 'Complete risk profiling and assessment questionnaires',
+      title: 'Client Dashboard',
+      description: 'Access your complete client dashboard and profile',
       icon: '📊',
       actions: [
-        { label: 'Risk Assessment', path: '/client/risk-assessment', primary: true }
-      ]
-    },
-    {
-      title: 'Goals & Planning',
-      description: 'Set and track your financial goals',
-      icon: '🎯',
-      actions: [
-        { label: 'Financial Goals', path: '/client/goals', primary: true }
+        { label: 'Dashboard', path: '/client/client-dashboard', primary: true }
       ]
     },
     {
       title: 'Documents',
-      description: 'Upload and manage your financial documents',
+      description: 'Upload and manage your R&D and financial documents',
       icon: '📄',
       actions: [
         { label: 'Manage Documents', path: '/client/documents', primary: true }
@@ -100,7 +89,7 @@ const OverviewPage: React.FC = () => {
     },
     {
       title: 'AI Assistant',
-      description: 'Chat with AI for personalized financial guidance',
+      description: 'Chat with AI for personalized R&D and financial guidance',
       icon: '🤖',
       actions: [
         { label: 'Start Chat', path: '/chat/chat', primary: true }
@@ -230,34 +219,34 @@ const OverviewPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">New to R&D Tax Credits?</h3>
-                <p className="text-gray-600 mb-4">
-                  Start with our R&D assessment tool to evaluate your eligibility for tax credits. 
-                  Our AI-powered analysis will help identify qualifying activities and estimate potential value.
-                </p>
-                <button
-                  onClick={() => navigate('/rd-form')}
-                  className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium"
-                >
-                  Start Assessment →
-                </button>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Complete Your Profile</h3>
-                <p className="text-gray-600 mb-4">
-                  Build a comprehensive financial profile to get personalized recommendations 
-                  and better insights from our platform.
-                </p>
-                <button
-                  onClick={() => navigate('/client/client-dashboard')}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Go to Dashboard →
-                </button>
-              </div>
-            </div>
+                         <div className="grid md:grid-cols-2 gap-8">
+               <div>
+                 <h3 className="text-lg font-semibold text-gray-900 mb-3">New to R&D Tax Credits?</h3>
+                 <p className="text-gray-600 mb-4">
+                   Start with our R&D assessment tool to evaluate your eligibility for tax credits. 
+                   Our AI-powered analysis will help identify qualifying activities and estimate potential value.
+                 </p>
+                 <button
+                   onClick={() => navigate('/rd-form')}
+                   className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium"
+                 >
+                   Start Assessment →
+                 </button>
+               </div>
+               <div>
+                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Analyze Call Transcripts</h3>
+                 <p className="text-gray-600 mb-4">
+                   Upload call transcripts to extract R&D-relevant information and get AI-powered 
+                   insights for better documentation and compliance.
+                 </p>
+                 <button
+                   onClick={() => navigate('/call-transcript-form')}
+                   className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
+                 >
+                   Analyze Call →
+                 </button>
+               </div>
+             </div>
           )}
         </div>
 
