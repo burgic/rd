@@ -98,7 +98,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/call-transcript-form" 
               element={
-                <ProtectedRoute requiredRole="adviser">
+                <ProtectedRoute>
                   <TranscriptForm />
                 </ProtectedRoute>
               } 
@@ -106,7 +106,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/call-transcript-analysis" 
               element={
-                <ProtectedRoute requiredRole="adviser">
+                <ProtectedRoute>
                   <TranscriptAnalysis />
                 </ProtectedRoute>
               } 
@@ -114,7 +114,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/call-transcript-history" 
               element={
-                <ProtectedRoute requiredRole="adviser">
+                <ProtectedRoute>
                   <TranscriptHistory />
                 </ProtectedRoute>
               } 
@@ -122,7 +122,7 @@ import { Toaster } from 'react-hot-toast';
             <Route 
               path="/call-transcript/:analysisId" 
               element={
-                <ProtectedRoute requiredRole="adviser">
+                <ProtectedRoute>
                   <TranscriptViewer />
                 </ProtectedRoute>
               } 
