@@ -8,6 +8,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const rateLimitMap = new Map();
 
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
