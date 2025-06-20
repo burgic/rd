@@ -72,6 +72,15 @@ const OverviewPage: React.FC = () => {
       ]
     },
     {
+      title: 'Direct Report Review',
+      description: 'Paste report content directly for instant AI analysis against HMRC's 14-point compliance criteria',
+      icon: '🔍',
+      actions: [
+        { label: 'Analyze Report Text', path: '/direct-report-form', primary: true },
+        { label: 'Review History', path: '/report-history' }
+      ]
+    },
+    {
       title: 'Call Transcript Analysis',
       description: 'AI-powered analysis of client calls to extract R&D insights',
       icon: '📞',
@@ -97,6 +106,15 @@ const OverviewPage: React.FC = () => {
       icon: '📋',
       actions: [
         { label: 'Upload Report', path: '/report-upload', primary: true },
+        { label: 'Review History', path: '/report-history' }
+      ]
+    },
+    {
+      title: 'Direct Report Review',
+      description: 'Paste client report content directly for instant AI analysis against HMRC compliance criteria',
+      icon: '🔍',
+      actions: [
+        { label: 'Analyze Report Text', path: '/direct-report-form', primary: true },
         { label: 'Review History', path: '/report-history' }
       ]
     },
