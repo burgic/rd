@@ -72,7 +72,95 @@ const DirectReportAnalysis: React.FC = () => {
     requestMadeRef.current = true;
     console.log('Making direct report analysis request for:', reportData.reportTitle);
     
-    analyzeReport();
+    const performAnalysis = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+
+        console.log('Sending request to report-reviewer-direct-background...');
+
+        const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user?.id,
+            reportContent: reportData.reportContent,
+            reportTitle: reportData.reportTitle,
+            reportType: reportData.reportType
+          }),
+          signal: abortController.signal
+        });
+
+        if (abortController.signal.aborted) return;
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          let errorData;
+          try {
+            const responseText = await response.text();
+            console.log('Error response text:', responseText);
+            console.log('Error response length:', responseText.length);
+            if (responseText) {
+              errorData = JSON.parse(responseText);
+            } else {
+              errorData = { error: 'Empty response from server' };
+            }
+          } catch (parseError: unknown) {
+            console.error('Failed to parse error response:', parseError);
+            errorData = { error: `Server error (${response.status})` };
+          }
+          
+          if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
+          throw new Error(errorData.error || 'Failed to analyze report');
+        }
+
+        let data;
+        try {
+          const responseText = await response.text();
+          console.log('Success response length:', responseText.length);
+          console.log('Success response preview:', responseText.substring(0, 200));
+          
+          if (!responseText) {
+            throw new Error('Empty response from server');
+          }
+          if (responseText.trim() === '') {
+            throw new Error('Response contains only whitespace');
+          }
+          
+          data = JSON.parse(responseText);
+          console.log('Parsed response data keys:', Object.keys(data));
+          console.log('Has analysis:', !!data.analysis);
+        } catch (parseError: unknown) {
+          console.error('Failed to parse response JSON:', parseError);
+          const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+          console.error('Parse error details:', errorMessage);
+          throw new Error('Invalid response from server. Please try again.');
+        }
+
+        if (data.analysis) {
+          setResult(data.analysis);
+          setReviewId(data.reviewId);
+          setLoading(false);
+        } else {
+          throw new Error('Invalid response format: missing analysis data');
+        }
+
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        console.error('Analysis error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to analyze report';
+        setError(errorMessage);
+        setLoading(false);
+        requestMadeRef.current = false;
+      }
+    };
+
+    performAnalysis();
 
     // Cleanup function
     return () => {
@@ -81,83 +169,7 @@ const DirectReportAnalysis: React.FC = () => {
         console.log('Aborted direct report analysis request due to component unmount');
       }
     };
-  }, []);
-
-  const analyzeReport = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      console.log('Sending request to report-reviewer-direct-background...');
-
-      const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          reportContent: reportData.reportContent,
-          reportTitle: reportData.reportTitle,
-          reportType: reportData.reportType
-        }),
-        signal: abortController.signal
-      });
-
-      if (abortController.signal.aborted) return;
-
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        let errorData;
-        try {
-          const responseText = await response.text();
-          console.log('Error response text:', responseText);
-          if (responseText) {
-            errorData = JSON.parse(responseText);
-          } else {
-            errorData = { error: 'Empty response from server' };
-          }
-        } catch (parseError) {
-          console.error('Failed to parse error response:', parseError);
-          errorData = { error: `Server error (${response.status})` };
-        }
-        
-        if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
-        throw new Error(errorData.error || 'Failed to analyze report');
-      }
-
-      let data;
-      try {
-        const responseText = await response.text();
-        console.log('Success response length:', responseText.length);
-        if (!responseText) {
-          throw new Error('Empty response from server');
-        }
-        data = JSON.parse(responseText);
-        console.log('Parsed response data:', data);
-      } catch (parseError) {
-        console.error('Failed to parse response JSON:', parseError);
-        throw new Error('Invalid response from server. Please try again.');
-      }
-
-      if (data.analysis) {
-        setResult(data.analysis);
-        setReviewId(data.reviewId);
-        setLoading(false);
-      } else {
-        throw new Error('Invalid response format: missing analysis data');
-      }
-
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      console.error('Analysis error:', error);
-      setError(error.message || 'Failed to analyze report');
-      setLoading(false);
-      requestMadeRef.current = false;
-    }
-  };
+  }, []); // Empty dependency array since we only want this to run once
 
   const handleNewAnalysis = () => {
     navigate('/direct-report-form');
@@ -366,11 +378,9 @@ const DirectReportAnalysis: React.FC = () => {
               </svg>
             </div>
             <div>
-              <h4 className="font-semibold text-yellow-800">Professional Review Required</h4>
+              <h4 className="font-semibold text-yellow-800">Review Required</h4>
               <p className="text-yellow-700 mt-1">
-                This AI analysis is for guidance only and should not replace professional tax advice. 
-                R&D tax credit compliance is complex and requires expert review. Always consult with a 
-                qualified R&D tax advisor before finalizing any claims or submissions to HMRC.
+                This AI analysis is for guidance only.
               </p>
             </div>
           </div>

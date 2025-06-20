@@ -84,7 +84,13 @@ exports.handler = async (event) => {
     }
 
     // Generate analysis using OpenAI
+    console.log('Starting OpenAI analysis...');
     const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
+    console.log('OpenAI analysis completed:', {
+      hasAnalysis: !!analysis,
+      overallScore: analysis?.overallScore,
+      complianceScore: analysis?.complianceScore
+    });
 
     // Save to database
     const pendingRecord = {
@@ -114,23 +120,44 @@ exports.handler = async (event) => {
       console.warn('Database save failed, returning analysis without saving');
     }
 
+    const responseBody = {
+      analysis,
+      reviewId: savedRecord?.id || null,
+      reportTitle,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('Returning response with analysis:', {
+      hasAnalysis: !!analysis,
+      overallScore: analysis?.overallScore,
+      complianceScore: analysis?.complianceScore,
+      hasChecklistFeedback: !!analysis?.checklistFeedback,
+      responseBodySize: JSON.stringify(responseBody).length
+    });
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ 
-        analysis,
-        reviewId: savedRecord?.id || null,
-        reportTitle,
-        timestamp: new Date().toISOString()
-      }),
+      body: JSON.stringify(responseBody),
     };
 
   } catch (error) {
     console.error('Error in report analysis function:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Return a detailed error response
+    const errorResponse = {
+      error: error.message || 'Failed to analyze report. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('Returning error response:', errorResponse);
+    
     return { 
       statusCode: 500, 
       headers, 
-      body: JSON.stringify({ error: 'Failed to analyze report. Please try again.' }) 
+      body: JSON.stringify(errorResponse)
     };
   }
 };
