@@ -28,12 +28,16 @@ exports.handler = async (event) => {
 
     if (error || !data) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Review not found' }) };
 
-    if (data.status === 'pending') {
-      return { statusCode: 202, headers, body: JSON.stringify({ status: 'processing', reviewId }) };
+    // Determine status based on analysis completion
+    const isAnalysisComplete = data.overall_score !== null && data.compliance_score !== null;
+    const isError = data.detailed_feedback && data.detailed_feedback.startsWith('Analysis failed:');
+
+    if (isError) {
+      return { statusCode: 500, headers, body: JSON.stringify({ status: 'error', message: data.detailed_feedback || 'Analysis failed' }) };
     }
 
-    if (data.status === 'error') {
-      return { statusCode: 500, headers, body: JSON.stringify({ status: 'error', message: data.detailed_feedback || 'Analysis failed' }) };
+    if (!isAnalysisComplete) {
+      return { statusCode: 202, headers, body: JSON.stringify({ status: 'processing', reviewId }) };
     }
 
     return {

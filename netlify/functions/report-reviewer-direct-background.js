@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -16,6 +17,17 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers };
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
 
+  // Check required environment variables
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('Missing Supabase configuration');
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error' }) };
+  }
+
+  if (!openaiApiKey) {
+    console.error('Missing OpenAI API key');
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'AI service configuration error' }) };
+  }
+
   try {
     const { userId, reportContent, reportTitle, reportType } = JSON.parse(event.body);
 
@@ -23,14 +35,15 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
     }
 
-    // Save pending record
+    // Save pending record (without status field since it doesn't exist in schema)
     const pendingRecord = {
       user_id: userId,
       file_name: reportTitle,
       report_type: reportType || 'rd_report',
       content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
-      status: 'pending',
-      created_at: new Date().toISOString()
+      overall_score: null, // Will be updated after analysis
+      compliance_score: null,
+      detailed_feedback: 'Analysis in progress...'
     };
 
     const { data: savedRecord, error: saveError } = await supabase
@@ -39,7 +52,11 @@ exports.handler = async (event) => {
       .select()
       .single();
 
-    if (saveError) throw new Error('Failed to initiate analysis');
+    if (saveError) {
+      console.error('Supabase save error:', saveError);
+      console.error('Pending record:', pendingRecord);
+      throw new Error(`Database error: ${saveError.message || 'Failed to initiate analysis'}`);
+    }
 
     // Return immediate response
     const response = {
@@ -50,7 +67,7 @@ exports.handler = async (event) => {
 
     // Background processing (runs after response is sent)
     try {
-      const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report'); // Your existing OpenAI logic
+      const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
       const dbRecord = {
         overall_score: analysis.overallScore,
         compliance_score: analysis.complianceScore,
@@ -58,8 +75,7 @@ exports.handler = async (event) => {
         improvements: JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].weaknesses).flat()),
         hmrc_compliance: analysis.checklistFeedback,
         recommendations: analysis.recommendations || [],
-        detailed_feedback: analysis.detailedFeedback,
-        status: 'completed'
+        detailed_feedback: analysis.detailedFeedback
       };
 
       const { error: updateError } = await supabase
@@ -67,11 +83,15 @@ exports.handler = async (event) => {
         .update(dbRecord)
         .eq('id', savedRecord.id);
 
-      if (updateError) throw new Error('Failed to update analysis results');
+      if (updateError) {
+        console.error('Failed to update analysis results:', updateError);
+        throw new Error('Failed to update analysis results');
+      }
     } catch (error) {
+      console.error('Background processing error:', error);
       await supabase
         .from('report_reviews')
-        .update({ status: 'error', detailed_feedback: error.message || 'Analysis failed' })
+        .update({ detailed_feedback: `Analysis failed: ${error.message || 'Unknown error'}` })
         .eq('id', savedRecord.id);
     }
 
@@ -196,7 +216,7 @@ async function analyzeReportDirect(reportContent, reportTitle, reportType) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: "system",
