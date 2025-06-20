@@ -34,6 +34,7 @@ import TranscriptForm from './components/CallTranscripts/TranscriptForm';
 import TranscriptAnalysis from './components/CallTranscripts/TranscriptAnalysis';
 import TranscriptHistory from './components/CallTranscripts/TranscriptHistory';
 import TranscriptViewer from './components/CallTranscripts/TranscriptViewer';
+import OverviewPage from './components/Dashboard/OverviewPage';
 import { Toaster } from 'react-hot-toast';
 
 
@@ -48,6 +49,16 @@ import { Toaster } from 'react-hot-toast';
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            
+            {/* Overview/Dashboard Route */}
+            <Route 
+              path="/overview" 
+              element={
+                <ProtectedRoute>
+                  <OverviewPage />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* R&D Assessment Routes */}
             <Route 
