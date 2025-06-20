@@ -69,6 +69,13 @@ exports.handler = async (event) => {
 
     console.log('Cleaned content length:', cleanedContent.length, 'Original length:', reportContent.length);
 
+    // Truncate very long content to prevent timeouts
+    let processedContent = cleanedContent;
+    if (cleanedContent.length > 20000) {
+      processedContent = cleanedContent.substring(0, 20000) + '\n\n[Document truncated for analysis due to length]';
+      console.log('Content truncated from', cleanedContent.length, 'to', processedContent.length, 'characters');
+    }
+
     // Rate limiting - 5 reports per minute
     const now = Date.now();
     if (rateLimitMap.has(userId)) {
@@ -93,14 +100,16 @@ exports.handler = async (event) => {
     }
 
     // Analyze the report using OpenAI
-    const analysis = await analyzeReport(cleanedContent, fileName, reportType);
+    console.log('Starting OpenAI analysis...');
+    const analysis = await analyzeReport(processedContent, fileName, reportType);
+    console.log('OpenAI analysis completed, overall score:', analysis.overallScore);
 
     // Prepare the database record
     const dbRecord = {
       user_id: userId,
       file_name: fileName,
       report_type: reportType || 'rd_report',
-              content_preview: cleanedContent.substring(0, 500) + (cleanedContent.length > 500 ? '...' : ''),
+              content_preview: processedContent.substring(0, 500) + (processedContent.length > 500 ? '...' : ''),
       overall_score: analysis.overallScore,
       compliance_score: analysis.complianceScore,
       strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
@@ -153,6 +162,7 @@ exports.handler = async (event) => {
 };
 
 async function analyzeReport(reportContent, fileName, reportType) {
+  console.log('analyzeReport called with content length:', reportContent.length);
   try {
     const systemPrompt = 
     `You are an expert R&D tax-credits advisor specialising in HMRC compliance review. Your task is to analyse R&D reports and technical documentation against HMRC’s strict criteria.
@@ -250,6 +260,7 @@ Analyze the report: "${fileName}" and provide:
 - Use technical language appropriate for R&D professionals
 - Use precise R&D/CT terminology suitable for professional advisers.`;
 
+    console.log('Making OpenAI API call...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -268,12 +279,15 @@ Analyze the report: "${fileName}" and provide:
             content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
           }
         ],
-        max_tokens: 1500,
+        max_tokens: 2000,
         temperature: 0.3,
         response_format: { type: "json_object" }
       }),
+      signal: AbortSignal.timeout(25000) // 25 second timeout
     });
 
+    console.log('OpenAI API response status:', response.status);
+    
     if (!response.ok) {
       const errorData = await response.json();
       console.error('OpenAI API error:', errorData);
@@ -288,16 +302,21 @@ Analyze the report: "${fileName}" and provide:
     }
 
     const data = await response.json();
+    console.log('OpenAI API response received, parsing...');
     
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid OpenAI response format:', data);
       throw new Error('Invalid response format from OpenAI');
     }
 
     const analysisText = data.choices[0].message.content;
+    console.log('Analysis text length:', analysisText.length);
     
     // Try to parse JSON response
     try {
-      return JSON.parse(analysisText);
+      const parsed = JSON.parse(analysisText);
+      console.log('Successfully parsed JSON analysis');
+      return parsed;
     } catch (parseError) {
       console.error('Failed to parse AI response as JSON:', parseError);
       console.error('AI Response text (first 500 chars):', analysisText.substring(0, 500));
