@@ -83,10 +83,10 @@ exports.handler = async (event) => {
         content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
         overall_score: analysis.overallScore,
         compliance_score: analysis.complianceScore,
-        strengths: analysis.strengths,
-        improvements: analysis.improvements,
-        hmrc_compliance: analysis.hmrcCompliance,
-        recommendations: analysis.recommendations,
+        strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
+        improvements: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].weaknesses).flat()) : JSON.stringify([]),
+        hmrc_compliance: analysis.checklistFeedback || {},
+        recommendations: analysis.recommendations || [],
         detailed_feedback: analysis.detailedFeedback,
         document_id: documentId || null, // Link to document if provided
         created_at: new Date().toISOString()
@@ -96,6 +96,12 @@ exports.handler = async (event) => {
 
     if (saveError) {
       console.error('Error saving report analysis:', saveError);
+      console.error('Save error details:', {
+        code: saveError.code,
+        message: saveError.message,
+        details: saveError.details,
+        hint: saveError.hint
+      });
       // Continue without saving if database fails
     }
 
@@ -182,7 +188,7 @@ Analyze the report: "${fileName}" and provide:
 6. **Actionable Recommendations**
 7. **Detailed Section-by-Section Feedback**
 
-**OUTPUT FORMAT (exactly)**  
+**OUTPUT FORMAT - RESPOND ONLY WITH VALID JSON, NO OTHER TEXT**  
 {
   "overallScore": [0-100],
   "complianceScore": [0-100],
@@ -204,8 +210,8 @@ Analyze the report: "${fileName}" and provide:
   "detailedFeedback": "Comprehensive paragraph-form analysis…"
 }
 
-
 **CRITICAL RULES**
+- RESPOND ONLY WITH VALID JSON - NO EXPLANATORY TEXT BEFORE OR AFTER THE JSON
 - For every checklist point: be specific, cite evidence from the report, and list at least one strength **and** one weakness. 
 - Be thorough but constructive
 - Highlight both strengths AND weaknesses
@@ -229,11 +235,12 @@ Analyze the report: "${fileName}" and provide:
           },
           {
             role: 'user',
-            content: `Please analyze this R&D report content:\n\n${reportContent}`
+            content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
           }
         ],
         max_tokens: 2500,
         temperature: 0.3,
+        response_format: { type: "json_object" }
       }),
     });
 
@@ -256,18 +263,24 @@ Analyze the report: "${fileName}" and provide:
       return JSON.parse(analysisText);
     } catch (parseError) {
       console.error('Failed to parse AI response as JSON:', parseError);
+      console.error('AI Response text (first 500 chars):', analysisText.substring(0, 500));
       // Fallback structured response
       return {
         overallScore: 50,
         complianceScore: 40,
-        strengths: ["Report uploaded successfully"],
-        improvements: ["AI analysis temporarily unavailable - manual review recommended"],
-        hmrcCompliance: {
-          projectScope: {"score": 50, "feedback": "Unable to analyze at this time"},
-          technicalAdvance: {"score": 50, "feedback": "Unable to analyze at this time"},
-          uncertainty: {"score": 50, "feedback": "Unable to analyze at this time"},
-          documentation: {"score": 50, "feedback": "Unable to analyze at this time"},
-          eligibility: {"score": 50, "feedback": "Unable to analyze at this time"}
+        checklistFeedback: {
+          advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Unable to analyze - technical error"]},
+          uncertainty: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Analysis unavailable"]},
+          professionals: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Cannot assess competency"]},
+          process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis failed"]},
+          aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment check failed"]},
+          costs: {"score": 50, "strengths": ["File received"], "weaknesses": ["Cost analysis unavailable"]},
+          payeCap: {"score": 50, "strengths": ["Report uploaded"], "weaknesses": ["PAYE cap check failed"]},
+          grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant treatment analysis failed"]},
+          ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 consistency check failed"]},
+          evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence assessment failed"]},
+          conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Professional conduct review failed"]},
+          fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Fraud risk assessment failed"]}
         },
         recommendations: ["Retry analysis later", "Consider manual expert review"],
         detailedFeedback: `Analysis of ${fileName} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
@@ -281,14 +294,19 @@ Analyze the report: "${fileName}" and provide:
     return {
       overallScore: 50,
       complianceScore: 40,
-      strengths: ["Report received for analysis"],
-      improvements: ["AI analysis service temporarily unavailable"],
-      hmrcCompliance: {
-        projectScope: {"score": 50, "feedback": "Analysis unavailable - service error"},
-        technicalAdvance: {"score": 50, "feedback": "Analysis unavailable - service error"},
-        uncertainty: {"score": 50, "feedback": "Analysis unavailable - service error"},
-        documentation: {"score": 50, "feedback": "Analysis unavailable - service error"},
-        eligibility: {"score": 50, "feedback": "Analysis unavailable - service error"}
+      checklistFeedback: {
+        advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Service error - unable to analyze"]},
+        uncertainty: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Analysis service unavailable"]},
+        professionals: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Cannot assess competency - service error"]},
+        process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis service failed"]},
+        aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment service unavailable"]},
+        costs: {"score": 50, "strengths": ["File received"], "weaknesses": ["Cost analysis service error"]},
+        payeCap: {"score": 50, "strengths": ["Report uploaded"], "weaknesses": ["PAYE cap service unavailable"]},
+        grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant analysis service error"]},
+        ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 analysis service failed"]},
+        evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence analysis service error"]},
+        conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Conduct review service unavailable"]},
+        fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Risk assessment service error"]}
       },
       recommendations: [
         "Retry the analysis in a few minutes",
