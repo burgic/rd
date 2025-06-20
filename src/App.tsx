@@ -178,7 +178,7 @@ import { Toaster } from 'react-hot-toast';
               } 
             />
             <Route 
-              path="/direct-report-analysis" 
+              path="/report-analysis" 
               element={
                 <ProtectedRoute>
                   <DirectReportAnalysis />

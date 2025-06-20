@@ -62,7 +62,7 @@ const ReportAnalysis: React.FC = () => {
   useEffect(() => {
     // Early validation
     if (!reportData?.fileName || !reportData?.reportContent) {
-      navigate('/direct-report-form');
+      navigate('/report-form');
       return;
     }
 
@@ -423,7 +423,7 @@ ${analysis.detailedFeedback}
                 onClick={() => {
                   requestMadeRef.current = false;
                   setError(null);
-                  navigate('/direct-report-form');
+                  navigate('/report-form');
                 }}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
               >

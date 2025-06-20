@@ -76,7 +76,7 @@ const OverviewPage: React.FC = () => {
       description: 'Paste report content directly for instant AI analysis against HMRC\'s 14-point compliance criteria',
       icon: '🔍',
       actions: [
-        { label: 'Analyze Report Text', path: '/direct-report-form', primary: true },
+        { label: 'Analyze Report Text', path: '/report-form', primary: true },
         { label: 'Review History', path: '/report-history' }
       ]
     },
@@ -114,7 +114,7 @@ const OverviewPage: React.FC = () => {
       description: 'Paste client report content directly for instant AI analysis against HMRC compliance criteria',
       icon: '🔍',
       actions: [
-        { label: 'Analyze Report Text', path: '/direct-report-form', primary: true },
+        { label: 'Analyze Report Text', path: '/report-form', primary: true },
         { label: 'Review History', path: '/report-history' }
       ]
     },
