@@ -63,6 +63,15 @@ const OverviewPage: React.FC = () => {
       ]
     },
     {
+      title: 'R&D Report Reviewer',
+      description: 'Upload Word/text reports for AI analysis against HMRC criteria and compliance standards',
+      icon: '📋',
+      actions: [
+        { label: 'Upload Report', path: '/report-upload', primary: true },
+        { label: 'Review History', path: '/report-history' }
+      ]
+    },
+    {
       title: 'Call Transcript Analysis',
       description: 'AI-powered analysis of client calls to extract R&D insights',
       icon: '📞',
@@ -82,6 +91,15 @@ const OverviewPage: React.FC = () => {
   ];
 
   const adviserFeatures = [
+    {
+      title: 'R&D Report Reviewer',
+      description: 'Upload and analyze client R&D reports against HMRC criteria for compliance',
+      icon: '📋',
+      actions: [
+        { label: 'Upload Report', path: '/report-upload', primary: true },
+        { label: 'Review History', path: '/report-history' }
+      ]
+    },
     {
       title: 'Call Transcript Analysis',
       description: 'AI-powered analysis of client calls to extract R&D insights',

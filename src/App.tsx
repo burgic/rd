@@ -34,6 +34,10 @@ import TranscriptForm from './components/CallTranscripts/TranscriptForm';
 import TranscriptAnalysis from './components/CallTranscripts/TranscriptAnalysis';
 import TranscriptHistory from './components/CallTranscripts/TranscriptHistory';
 import TranscriptViewer from './components/CallTranscripts/TranscriptViewer';
+import ReportUpload from './components/ReportReviewer/ReportUpload';
+import ReportAnalysis from './components/ReportReviewer/ReportAnalysis';
+import ReportHistory from './components/ReportReviewer/ReportHistory';
+import ReportViewer from './components/ReportReviewer/ReportViewer';
 import OverviewPage from './components/Dashboard/OverviewPage';
 import { Toaster } from 'react-hot-toast';
 
@@ -124,6 +128,40 @@ import { Toaster } from 'react-hot-toast';
               element={
                 <ProtectedRoute>
                   <TranscriptViewer />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Report Reviewer Routes */}
+            <Route 
+              path="/report-upload" 
+              element={
+                <ProtectedRoute>
+                  <ReportUpload />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/report-analysis" 
+              element={
+                <ProtectedRoute>
+                  <ReportAnalysis />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/report-history" 
+              element={
+                <ProtectedRoute>
+                  <ReportHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/report-viewer/:reviewId" 
+              element={
+                <ProtectedRoute>
+                  <ReportViewer />
                 </ProtectedRoute>
               } 
             />

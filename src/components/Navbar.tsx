@@ -88,13 +88,13 @@ const Navbar: React.FC = () => {
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link to="/rd-history" className="navbar-link">
-                  Assessment History
+                <Link to="/report-upload" className="navbar-link">
+                  Report Reviewer
                 </Link>
               </li>
               <li className="navbar-item">
-                <Link to="/client/client-dashboard" className="navbar-link">
-                  Dashboard
+                <Link to="/call-transcript-form" className="navbar-link">
+                  Analyze Call
                 </Link>
               </li>
             </>
@@ -112,18 +112,13 @@ const Navbar: React.FC = () => {
                 </Link>
               </li>
               <li className="navbar-item">
+                <Link to="/report-upload" className="navbar-link">
+                  Report Reviewer
+                </Link>
+              </li>
+              <li className="navbar-item">
                 <Link to="/call-transcript-form" className="navbar-link">
                   Analyze Call
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link to="/call-transcript-history" className="navbar-link">
-                  Call History
-                </Link>
-              </li>
-              <li className="navbar-item">
-                <Link to="/adviser/create-client" className="navbar-link">
-                  Add Client
                 </Link>
               </li>
             </>

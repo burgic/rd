@@ -31,9 +31,7 @@ const DocumentsPage: React.FC = () => {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="max-w-2xl">
           <p className="text-gray-600">
-            Upload and manage important documents such as bank statements, investment reports, 
-            utility bills, and identity documents. We can automatically extract relevant information to 
-            update your profile.
+            Upload and manage documents.
           </p>
         </div>
         <button
