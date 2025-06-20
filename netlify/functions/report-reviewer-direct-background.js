@@ -4,11 +4,83 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
+
+// Initialize Supabase with service role key
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const rateLimitMap = new Map();
 
-exports.handler = async (event) => {
+// Helper function to log with timestamp and memory usage
+function logWithMetrics(message, data = {}) {
+  const timestamp = new Date().toISOString();
+  const memoryUsage = process.memoryUsage();
+  console.log(JSON.stringify({
+    timestamp,
+    message,
+    memory: {
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`
+    },
+    ...data
+  }));
+}
+
+// Constants for retry logic
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+// Helper function to delay execution
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to handle retries
+async function withRetry(operation, maxRetries = MAX_RETRIES) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      logWithMetrics('Attempting operation', { attempt: i + 1, maxRetries });
+      const startTime = Date.now();
+      const result = await operation();
+      const duration = Date.now() - startTime;
+      logWithMetrics('Operation successful', { 
+        attempt: i + 1, 
+        duration: `${duration}ms` 
+      });
+      return result;
+    } catch (error) {
+      lastError = error;
+      logWithMetrics('Operation failed', { 
+        attempt: i + 1, 
+        error: error.message,
+        status: error.status,
+        code: error.code
+      });
+      
+      if (error.status === 429 || error.status === 500) {
+        const waitTime = RETRY_DELAY * Math.pow(2, i);
+        logWithMetrics('Retrying after delay', { 
+          waitTime: `${waitTime}ms`,
+          nextAttempt: i + 2 
+        });
+        await delay(waitTime);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+// Handler for Netlify Functions
+exports.handler = async (event, context) => {
+  const startTime = Date.now();
+  logWithMetrics('Function started', { 
+    httpMethod: event.httpMethod,
+    path: event.path,
+    queryStringParameters: event.queryStringParameters
+  });
+
+  // Configure CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -16,43 +88,66 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
+  // Handle CORS preflight requests
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers };
-  }
-
-  if (event.httpMethod !== 'POST') {
-    return { 
-      statusCode: 405, 
-      headers, 
-      body: JSON.stringify({ error: 'Method not allowed' }) 
-    };
-  }
-
-  // Check required environment variables
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('Missing Supabase configuration');
-    return { 
-      statusCode: 500, 
-      headers, 
-      body: JSON.stringify({ error: 'Server configuration error' }) 
-    };
-  }
-
-  if (!openaiApiKey) {
-    console.error('Missing OpenAI API key');
-    return { 
-      statusCode: 500, 
-      headers, 
-      body: JSON.stringify({ error: 'AI service configuration error' }) 
+    logWithMetrics('Handling OPTIONS request');
+    return {
+      statusCode: 204,
+      headers
     };
   }
 
   try {
-    const { userId, reportContent, reportTitle, reportType } = JSON.parse(event.body);
+    // Check for POST method
+    if (event.httpMethod !== 'POST') {
+      logWithMetrics('Invalid method', { method: event.httpMethod });
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: 'Method not allowed' })
+      };
+    }
 
-    console.log('Report analysis request:', { userId, reportTitle, hasContent: !!reportContent, reportType });
+    // Check required environment variables
+    if (!supabaseUrl || !supabaseServiceKey) {
+      logWithMetrics('Missing Supabase configuration');
+      return { 
+        statusCode: 500, 
+        headers, 
+        body: JSON.stringify({ error: 'Server configuration error' }) 
+      };
+    }
 
+    if (!openaiApiKey) {
+      logWithMetrics('Missing OpenAI API key');
+      return { 
+        statusCode: 500, 
+        headers, 
+        body: JSON.stringify({ error: 'AI service configuration error' }) 
+      };
+    }
+
+    // Parse request body
+    logWithMetrics('Parsing request body');
+    const requestData = JSON.parse(event.body);
+    const { userId, reportContent, reportTitle, reportType } = requestData;
+
+    // Log request data size
+    logWithMetrics('Request data received', {
+      userId,
+      reportTitle,
+      hasContent: !!reportContent,
+      contentLength: reportContent?.length,
+      reportType
+    });
+
+    // Validate required fields
     if (!userId || !reportContent || !reportTitle) {
+      logWithMetrics('Missing required parameters', {
+        hasUserId: !!userId,
+        hasReportContent: !!reportContent,
+        hasReportTitle: !!reportTitle
+      });
       return { 
         statusCode: 400, 
         headers, 
@@ -67,6 +162,7 @@ exports.handler = async (event) => {
 
       if (now - lastRequest < 60000) { // 1-minute window
         if (requestCount >= 5) {
+          logWithMetrics('Rate limit exceeded', { userId, requestCount });
           return {
             statusCode: 429,
             headers,
@@ -83,10 +179,10 @@ exports.handler = async (event) => {
       rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
     }
 
-    // Generate analysis using OpenAI (synchronously like rd-assessment)
-    console.log('Starting OpenAI analysis...');
+    // Generate analysis using OpenAI with retry logic
+    logWithMetrics('Starting OpenAI analysis');
     const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
-    console.log('OpenAI analysis completed:', {
+    logWithMetrics('OpenAI analysis completed', {
       hasAnalysis: !!analysis,
       overallScore: analysis?.overallScore,
       complianceScore: analysis?.complianceScore
@@ -95,6 +191,7 @@ exports.handler = async (event) => {
     // Save to database (but don't fail the request if this fails)
     let reviewId = null;
     try {
+      logWithMetrics('Saving to database');
       const pendingRecord = {
         user_id: userId,
         file_name: reportTitle,
@@ -116,15 +213,16 @@ exports.handler = async (event) => {
         .single();
 
       if (saveError) {
-        console.error('Database save failed (non-critical):', saveError);
+        logWithMetrics('Database save failed (non-critical)', { error: saveError.message });
       } else {
         reviewId = savedRecord.id;
-        console.log('Saved to database with ID:', reviewId);
+        logWithMetrics('Saved to database successfully', { reviewId });
       }
     } catch (dbError) {
-      console.error('Database operation failed (non-critical):', dbError);
+      logWithMetrics('Database operation failed (non-critical)', { error: dbError.message });
     }
 
+    // Prepare response
     const responseBody = {
       analysis,
       reviewId,
@@ -132,12 +230,14 @@ exports.handler = async (event) => {
       timestamp: new Date().toISOString()
     };
 
-    console.log('Returning response with analysis:', {
+    const totalDuration = Date.now() - startTime;
+    logWithMetrics('Function completed successfully', {
+      totalDuration: `${totalDuration}ms`,
+      responseBodySize: JSON.stringify(responseBody).length,
       hasAnalysis: !!analysis,
       overallScore: analysis?.overallScore,
       complianceScore: analysis?.complianceScore,
-      hasChecklistFeedback: !!analysis?.checklistFeedback,
-      responseBodySize: JSON.stringify(responseBody).length
+      hasChecklistFeedback: !!analysis?.checklistFeedback
     });
 
     return {
@@ -147,9 +247,15 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error('Error in report analysis function:', error);
-    console.error('Error stack:', error.stack);
-    
+    const errorDuration = Date.now() - startTime;
+    logWithMetrics('Function failed', {
+      error: error.message,
+      status: error.status,
+      code: error.code,
+      duration: `${errorDuration}ms`,
+      stack: error.stack
+    });
+
     return { 
       statusCode: 500, 
       headers, 
@@ -162,7 +268,11 @@ exports.handler = async (event) => {
 };
 
 async function analyzeReportDirect(reportContent, reportTitle, reportType) {
-  console.log('analyzeReportDirect called with content length:', reportContent.length);
+  logWithMetrics('analyzeReportDirect called', { 
+    contentLength: reportContent.length,
+    reportTitle,
+    reportType
+  });
   
   if (!openaiApiKey) {
     throw new Error('OpenAI API key not configured');
@@ -264,77 +374,112 @@ async function analyzeReportDirect(reportContent, reportTitle, reportType) {
     - Use technical language appropriate for R&D professionals
     - Use precise R&D/CT terminology suitable for professional advisers.`;
 
-    console.log('Making OpenAI API call...');
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
-          }
-        ],
-        max_tokens: 1800,
-        temperature: 0.3,
-        response_format: { type: "json_object" }
-      }),
-      signal: AbortSignal.timeout(30000) // 30 second timeout like rd-assessment
+    // Use the same retry pattern as the working function
+    const analysisResult = await withRetry(async () => {
+      logWithMetrics('Making OpenAI API call');
+      const apiStartTime = Date.now();
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
+            }
+          ],
+          max_tokens: 1800,
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      const apiDuration = Date.now() - apiStartTime;
+      logWithMetrics('OpenAI API call completed', {
+        duration: `${apiDuration}ms`,
+        status: response.status
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        logWithMetrics('OpenAI API error', { 
+          status: response.status,
+          error: errorData 
+        });
+        
+        // Handle rate limit specifically
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after') || '15';
+          throw new Error(`Rate limit exceeded. Please wait ${retryAfter} seconds before trying again.`);
+        }
+        
+        const error = new Error(`OpenAI API error: ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+
+      const data = await response.json();
+      logWithMetrics('OpenAI response received', {
+        hasChoices: !!data.choices,
+        choicesLength: data.choices?.length,
+        tokens: data.usage?.total_tokens
+      });
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        logWithMetrics('Invalid OpenAI response format', { data });
+        throw new Error('Invalid response format from OpenAI');
+      }
+
+      return data;
     });
 
-    console.log('OpenAI API response status:', response.status);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenAI API error:', errorData);
-      
-      // Handle rate limit specifically
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after') || '15';
-        throw new Error(`Rate limit exceeded. Please wait ${retryAfter} seconds before trying again.`);
-      }
-      
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('OpenAI API response received, parsing...');
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      console.error('Invalid OpenAI response format:', data);
-      throw new Error('Invalid response format from OpenAI');
-    }
-
-    const analysisText = data.choices[0].message.content;
-    console.log('Analysis text length:', analysisText.length);
+    const analysisText = analysisResult.choices[0].message.content;
+    logWithMetrics('Analysis text received', { 
+      length: analysisText.length,
+      preview: analysisText.substring(0, 100) + '...'
+    });
     
     // Try to parse JSON response
     try {
       const parsed = JSON.parse(analysisText);
-      console.log('Successfully parsed JSON analysis');
+      logWithMetrics('Successfully parsed JSON analysis', {
+        hasOverallScore: typeof parsed.overallScore === 'number',
+        hasComplianceScore: typeof parsed.complianceScore === 'number',
+        hasChecklistFeedback: !!parsed.checklistFeedback,
+        hasRecommendations: Array.isArray(parsed.recommendations),
+        hasDetailedFeedback: !!parsed.detailedFeedback
+      });
       return parsed;
     } catch (parseError) {
-      console.error('Failed to parse AI response as JSON:', parseError);
-      console.error('AI Response text (first 500 chars):', analysisText.substring(0, 500));
+      logWithMetrics('Failed to parse AI response as JSON', { 
+        error: parseError.message,
+        textPreview: analysisText.substring(0, 500)
+      });
       // Fallback structured response
       return createFallbackResponse(reportTitle);
     }
 
   } catch (error) {
-    console.error('Error calling OpenAI API:', error);
+    logWithMetrics('Error in analyzeReportDirect', { 
+      error: error.message,
+      status: error.status,
+      code: error.code
+    });
     return createFallbackResponse(reportTitle);
   }
 }
 
 function createFallbackResponse(reportTitle) {
+  logWithMetrics('Creating fallback response', { reportTitle });
   return {
     overallScore: 50,
     complianceScore: 40,
