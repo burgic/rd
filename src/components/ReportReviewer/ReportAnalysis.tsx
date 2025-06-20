@@ -17,11 +17,8 @@ import {
 
 interface ReportAnalysisData {
   reportContent: string;
-  fileName: string;
+  reportTitle: string;  // From direct form input
   reportType: string;
-  fileSize: number;
-  documentId?: string;
-  storagePath?: string;
 }
 
 interface AnalysisResult {
@@ -60,8 +57,8 @@ const ReportAnalysis: React.FC = () => {
 
   // Single effect that runs once when component mounts with valid data
   useEffect(() => {
-    // Early validation
-    if (!reportData?.fileName || !reportData?.reportContent) {
+    // Early validation - check for form data
+    if (!reportData?.reportContent || !reportData?.reportTitle) {
       navigate('/report-form');
       return;
     }
@@ -79,7 +76,7 @@ const ReportAnalysis: React.FC = () => {
 
     // Mark that we're making a request
     requestMadeRef.current = true;
-    console.log('Making report analysis request for:', reportData.fileName);
+    console.log('Making report analysis request for:', reportData.reportTitle);
     
     // Make the analysis request
     analyzeReport();
@@ -117,9 +114,9 @@ const ReportAnalysis: React.FC = () => {
         body: JSON.stringify({
           userId: user.id,
           reportContent: reportData.reportContent,
-          fileName: reportData.fileName,
+          fileName: reportData.reportTitle,
           reportType: reportData.reportType,
-          documentId: reportData.documentId || null
+          documentId: null
         }),
         signal: abortController.signal, // Add abort signal
       });
@@ -159,23 +156,6 @@ const ReportAnalysis: React.FC = () => {
 
       // Save to database
       await saveAnalysis(parsedResult, data.reviewId);
-
-      // If we have a document ID, update the document with the analysis link
-      if (reportData.documentId && data.reviewId) {
-        try {
-          await supabase
-            .from('documents')
-            .update({ 
-              related_report_review_id: data.reviewId,
-              processing_status: 'completed',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', reportData.documentId);
-        } catch (updateError) {
-          console.error('Failed to update document with analysis link:', updateError);
-          // Don't fail the whole process if this update fails
-        }
-      }
 
     } catch (error: any) {
       // Don't show errors for aborted requests
@@ -247,9 +227,9 @@ const ReportAnalysis: React.FC = () => {
         .insert({
           id: reviewId,
           user_id: user.id,
-          file_name: reportData.fileName,
+          file_name: reportData.reportTitle,
           report_type: reportData.reportType,
-          file_size: reportData.fileSize,
+          file_size: 0,
           report_content: reportData.reportContent,
           overall_score: analysisResult.overallScore,
           compliance_score: analysisResult.complianceScore,
@@ -444,10 +424,10 @@ ${analysis.detailedFeedback}
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No Report Data</h2>
           <p className="text-gray-600 mb-4">Please upload a report first.</p>
           <button
-            onClick={() => navigate('/report-upload')}
+            onClick={() => navigate('/report-form')}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Upload Report
+            Back to Form
           </button>
         </div>
       </div>
@@ -465,16 +445,16 @@ ${analysis.detailedFeedback}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => navigate('/report-upload')}
+                  onClick={() => navigate('/report-form')}
                   className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Back to Upload</span>
+                  <span>Back to Form</span>
                 </button>
                 <div className="h-6 border-l border-gray-300"></div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Report Analysis</h1>
-                  <p className="text-gray-600">{reportData.fileName} • {formatFileSize(reportData.fileSize)}</p>
+                  <p className="text-gray-600">{reportData.reportTitle}</p>
                 </div>
               </div>
               
@@ -648,7 +628,7 @@ ${analysis.detailedFeedback}
               View Report History
             </button>
             <button
-              onClick={() => navigate('/report-upload')}
+              onClick={() => navigate('/report-form')}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               Analyze Another Report
