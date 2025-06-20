@@ -164,7 +164,7 @@ const OverviewPage: React.FC = () => {
           </p>
           <div className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
             <span className="mr-2">👤</span>
-            Logged in as: {userRole?.charAt(0).toUpperCase() + userRole?.slice(1)} - {user.email}
+            Logged in as: {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : 'User'} - {user.email}
           </div>
         </div>
 
