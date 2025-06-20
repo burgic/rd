@@ -46,14 +46,11 @@ const DirectReportAnalysis: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const requestMadeRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const reportData = location.state as DirectReportData;
 
-  // Single effect that runs once when component mounts with valid data
   useEffect(() => {
     // Early validation
     if (!reportData?.reportTitle || !reportData?.reportContent) {
@@ -66,20 +63,18 @@ const DirectReportAnalysis: React.FC = () => {
       return;
     }
 
-    // Prevent multiple requests - only make request once per component lifecycle
+    // Prevent multiple requests
     if (requestMadeRef.current) {
       console.log('Request already made for this component instance, skipping');
       return;
     }
 
-    // Mark that we're making a request
     requestMadeRef.current = true;
     console.log('Making direct report analysis request for:', reportData.reportTitle);
     
-    // Make the analysis request
     analyzeReport();
 
-    // Cleanup function to abort request if component unmounts
+    // Cleanup function
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -96,6 +91,8 @@ const DirectReportAnalysis: React.FC = () => {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
+      console.log('Sending request to report-reviewer-direct-background...');
+
       const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,10 +107,13 @@ const DirectReportAnalysis: React.FC = () => {
 
       if (abortController.signal.aborted) return;
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
         let errorData;
         try {
           const responseText = await response.text();
+          console.log('Error response text:', responseText);
           if (responseText) {
             errorData = JSON.parse(responseText);
           } else {
@@ -125,84 +125,37 @@ const DirectReportAnalysis: React.FC = () => {
         }
         
         if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
-        throw new Error(errorData.error || 'Failed to initiate analysis');
+        throw new Error(errorData.error || 'Failed to analyze report');
       }
 
       let data;
       try {
         const responseText = await response.text();
+        console.log('Success response length:', responseText.length);
         if (!responseText) {
           throw new Error('Empty response from server');
         }
         data = JSON.parse(responseText);
+        console.log('Parsed response data:', data);
       } catch (parseError) {
         console.error('Failed to parse response JSON:', parseError);
         throw new Error('Invalid response from server. Please try again.');
       }
-      if (response.status === 202 && data.status === 'processing') {
-        setReviewId(data.reviewId);
-        setIsProcessing(true);
-        startPolling(data.reviewId);
-      } else {
+
+      if (data.analysis) {
         setResult(data.analysis);
         setReviewId(data.reviewId);
         setLoading(false);
+      } else {
+        throw new Error('Invalid response format: missing analysis data');
       }
+
     } catch (error: any) {
       if (error.name === 'AbortError') return;
-      setError(error.message || 'Failed to initiate analysis');
+      console.error('Analysis error:', error);
+      setError(error.message || 'Failed to analyze report');
       setLoading(false);
       requestMadeRef.current = false;
-    }
-  };
-
-  const startPolling = (reviewId: string) => {
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await fetch(`/.netlify/functions/check-review-status?reviewId=${reviewId}`);
-        if (!response.ok) throw new Error('Failed to check status');
-        
-        let data;
-        try {
-          const responseText = await response.text();
-          if (!responseText) {
-            throw new Error('Empty response from server');
-          }
-          data = JSON.parse(responseText);
-        } catch (parseError) {
-          console.error('Failed to parse polling response:', parseError);
-          throw new Error('Invalid response from server');
-        }
-
-        if (data.status === 'completed') {
-          setResult(data.analysis);
-          setIsProcessing(false);
-          stopPolling();
-          setLoading(false);
-        } else if (data.status === 'error') {
-          setError(data.message || 'Analysis failed');
-          setIsProcessing(false);
-          stopPolling();
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        // Don't stop polling on single error, but limit retries
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage.includes('Invalid response') || errorMessage.includes('Empty response')) {
-          setError('Server communication error. Please try again.');
-          setIsProcessing(false);
-          stopPolling();
-          setLoading(false);
-        }
-      }
-    }, 5000); // Poll every 5 seconds
-  };
-
-  const stopPolling = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
     }
   };
 
@@ -244,17 +197,17 @@ const DirectReportAnalysis: React.FC = () => {
     esoteric: 'Esoteric Analysis'
   };
 
-  if (loading || isProcessing) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {isProcessing ? 'Processing Your Report' : 'Initiating Analysis'}
+              Analyzing Your Report
             </h2>
             <p className="text-gray-600">
-              {isProcessing ? 'Our AI is analyzing your report. This may take up to 30 seconds.' : 'Preparing your report for analysis...'}
+              Our AI is analyzing your report against HMRC compliance requirements...
             </p>
           </div>
         </div>

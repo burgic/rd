@@ -6,6 +6,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+const rateLimitMap = new Map();
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -14,36 +16,89 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers };
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return { 
+      statusCode: 405, 
+      headers, 
+      body: JSON.stringify({ error: 'Method not allowed' }) 
+    };
+  }
 
   // Check required environment variables
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Missing Supabase configuration');
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error' }) };
+    return { 
+      statusCode: 500, 
+      headers, 
+      body: JSON.stringify({ error: 'Server configuration error' }) 
+    };
   }
 
   if (!openaiApiKey) {
     console.error('Missing OpenAI API key');
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'AI service configuration error' }) };
+    return { 
+      statusCode: 500, 
+      headers, 
+      body: JSON.stringify({ error: 'AI service configuration error' }) 
+    };
   }
 
   try {
     const { userId, reportContent, reportTitle, reportType } = JSON.parse(event.body);
 
+    console.log('Report analysis request:', { userId, reportTitle, hasContent: !!reportContent, reportType });
+
     if (!userId || !reportContent || !reportTitle) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
+      return { 
+        statusCode: 400, 
+        headers, 
+        body: JSON.stringify({ error: 'Missing required fields: userId, reportContent, reportTitle' }) 
+      };
     }
 
-    // Save pending record (without status field since it doesn't exist in schema)
+    // Rate limiting - prevent abuse (5 requests per minute)
+    const now = Date.now();
+    if (rateLimitMap.has(userId)) {
+      const { lastRequest, requestCount } = rateLimitMap.get(userId);
+
+      if (now - lastRequest < 60000) { // 1-minute window
+        if (requestCount >= 5) {
+          return {
+            statusCode: 429,
+            headers,
+            body: JSON.stringify({ 
+              error: 'Too many requests. Please wait a minute before submitting more reports.' 
+            }),
+          };
+        }
+        rateLimitMap.set(userId, { lastRequest: now, requestCount: requestCount + 1 });
+      } else {
+        rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
+      }
+    } else {
+      rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
+    }
+
+    // Generate analysis using OpenAI
+    const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
+
+    // Save to database
     const pendingRecord = {
       user_id: userId,
       file_name: reportTitle,
       report_type: reportType || 'rd_report',
       content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
-      overall_score: null, // Will be updated after analysis
-      compliance_score: null,
-      detailed_feedback: 'Analysis in progress...'
+      overall_score: analysis.overallScore,
+      compliance_score: analysis.complianceScore,
+      strengths: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].strengths || []).flat()),
+      improvements: JSON.stringify(Object.keys(analysis.checklistFeedback || {}).map(key => analysis.checklistFeedback[key].weaknesses || []).flat()),
+      hmrc_compliance: analysis.checklistFeedback || {},
+      recommendations: analysis.recommendations || [],
+      detailed_feedback: analysis.detailedFeedback
     };
 
     const { data: savedRecord, error: saveError } = await supabase
@@ -55,51 +110,28 @@ exports.handler = async (event) => {
     if (saveError) {
       console.error('Supabase save error:', saveError);
       console.error('Pending record:', pendingRecord);
-      throw new Error(`Database error: ${saveError.message || 'Failed to initiate analysis'}`);
+      // Don't fail the request if database save fails, still return analysis
+      console.warn('Database save failed, returning analysis without saving');
     }
 
-    // Return immediate response
-    const response = {
-      statusCode: 202,
+    return {
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ status: 'processing', reviewId: savedRecord.id })
+      body: JSON.stringify({ 
+        analysis,
+        reviewId: savedRecord?.id || null,
+        reportTitle,
+        timestamp: new Date().toISOString()
+      }),
     };
 
-    // Background processing (runs after response is sent)
-    try {
-      const analysis = await analyzeReportDirect(reportContent, reportTitle, reportType || 'rd_report');
-      const dbRecord = {
-        overall_score: analysis.overallScore,
-        compliance_score: analysis.complianceScore,
-        strengths: JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()),
-        improvements: JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].weaknesses).flat()),
-        hmrc_compliance: analysis.checklistFeedback,
-        recommendations: analysis.recommendations || [],
-        detailed_feedback: analysis.detailedFeedback
-      };
-
-      const { error: updateError } = await supabase
-        .from('report_reviews')
-        .update(dbRecord)
-        .eq('id', savedRecord.id);
-
-      if (updateError) {
-        console.error('Failed to update analysis results:', updateError);
-        throw new Error('Failed to update analysis results');
-      }
-    } catch (error) {
-      console.error('Background processing error:', error);
-      await supabase
-        .from('report_reviews')
-        .update({ detailed_feedback: `Analysis failed: ${error.message || 'Unknown error'}` })
-        .eq('id', savedRecord.id);
-    }
-
-    return response;
-
   } catch (error) {
-    console.error('Error in background function:', error);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to initiate analysis' }) };
+    console.error('Error in report analysis function:', error);
+    return { 
+      statusCode: 500, 
+      headers, 
+      body: JSON.stringify({ error: 'Failed to analyze report. Please try again.' }) 
+    };
   }
 };
 
@@ -161,8 +193,6 @@ async function analyzeReportDirect(reportContent, reportTitle, reportType) {
     14. **What hasn't been thought of**
         • As an expert R&D tax professional you delight in finding the esoteric, unexpected, obscure and highly nuanced. 
         • Review the report, consider against what else you know and have found, similarities with others, different approaches and ways of thinking and make these suggestions.
-
-
 
     **ANALYSIS REQUIREMENTS**
     Analyze the report: "${reportTitle}" and provide:
@@ -269,57 +299,35 @@ async function analyzeReportDirect(reportContent, reportTitle, reportType) {
       console.error('Failed to parse AI response as JSON:', parseError);
       console.error('AI Response text (first 500 chars):', analysisText.substring(0, 500));
       // Fallback structured response
-      return {
-        overallScore: 50,
-        complianceScore: 40,
-        checklistFeedback: {
-          advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Unable to analyze - technical error"]},
-          uncertainty: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Analysis unavailable"]},
-          professionals: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Cannot assess competency"]},
-          process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis failed"]},
-          aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment check failed"]},
-          costs: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Cost analysis unavailable"]},
-          payeCap: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["PAYE cap check failed"]},
-          grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant treatment analysis failed"]},
-          ct600: {"score": 50, "strengths": ["Content accepted"], "weaknesses": ["CT600 consistency check failed"]},
-          evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence assessment failed"]},
-          conduct: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Professional conduct review failed"]},
-          fraudTribunal: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Fraud risk assessment failed"]},
-          esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis failed"]}
-        },
-        recommendations: ["Retry analysis later", "Consider manual expert review"],
-        detailedFeedback: `Analysis of ${reportTitle} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
-      };
+      return createFallbackResponse(reportTitle);
     }
 
   } catch (error) {
     console.error('Error calling OpenAI API:', error);
-    
-    // Fallback response if OpenAI fails
-    return {
-      overallScore: 50,
-      complianceScore: 40,
-      checklistFeedback: {
-        advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Service error - unable to analyze"]},
-        uncertainty: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Analysis service unavailable"]},
-        professionals: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Cannot assess competency - service error"]},
-        process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis service failed"]},
-        aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment service unavailable"]},
-        costs: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Cost analysis service error"]},
-        payeCap: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["PAYE cap service unavailable"]},
-        grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant analysis service error"]},
-        ct600: {"score": 50, "strengths": ["Content accepted"], "weaknesses": ["CT600 analysis service failed"]},
-        evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence analysis service error"]},
-        conduct: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Conduct review service unavailable"]},
-        fraudTribunal: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Risk assessment service error"]},
-        esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis service error"]}
-      },
-      recommendations: [
-        "Retry the analysis in a few minutes",
-        "Ensure the report contains technical R&D content",
-        "Consider manual review by R&D tax specialist"
-      ],
-      detailedFeedback: `Unable to complete automated analysis of ${reportTitle} at this time. The report has been received but our AI analysis service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for manual review.`
-    };
+    return createFallbackResponse(reportTitle);
   }
-} 
+}
+
+function createFallbackResponse(reportTitle) {
+  return {
+    overallScore: 50,
+    complianceScore: 40,
+    checklistFeedback: {
+      advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Unable to analyze - technical error"]},
+      uncertainty: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Analysis unavailable"]},
+      professionals: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Cannot assess competency"]},
+      process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis failed"]},
+      aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment check failed"]},
+      costs: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Cost analysis unavailable"]},
+      payeCap: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["PAYE cap check failed"]},
+      grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant treatment analysis failed"]},
+      ct600: {"score": 50, "strengths": ["Content accepted"], "weaknesses": ["CT600 consistency check failed"]},
+      evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence assessment failed"]},
+      conduct: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Professional conduct review failed"]},
+      fraudTribunal: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Fraud risk assessment failed"]},
+      esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis failed"]}
+    },
+    recommendations: ["Retry analysis later", "Consider manual expert review"],
+    detailedFeedback: `Analysis of ${reportTitle} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
+  };
+}
