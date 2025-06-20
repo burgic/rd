@@ -1,10 +1,10 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const rateLimitMap = new Map();
 
@@ -201,6 +201,10 @@ async function analyzeReport(reportContent, fileName, reportType) {
 13. **Tribunal Lessons Applied**  
     • Narrative demonstrates awareness of recent cases (e.g. Flame Tree, H&H Scaffolding, Get Onbord, Tills Plus) and shows how pitfalls were avoided
 
+14. **What hasn't been thought of**
+    • As an expert R&D tax professional you delight in finding the esoteric, unexpected and highly nuanced. 
+
+
 
 **ANALYSIS REQUIREMENTS**
 Analyze the report: "${fileName}" and provide:
@@ -229,7 +233,8 @@ Analyze the report: "${fileName}" and provide:
     "ct600":          {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]},
     "evidence":       {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]},
     "conduct":        {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]},
-    "fraudTribunal":  {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]}
+    "fraudTribunal":  {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]},
+    "esoteric":       {"score": [0-100], "strengths": ["…"], "weaknesses": ["…"]}
   },
   "recommendations": ["rec1", "rec2", …],
   "detailedFeedback": "Comprehensive paragraph-form analysis…"
@@ -312,7 +317,8 @@ Analyze the report: "${fileName}" and provide:
           ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 consistency check failed"]},
           evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence assessment failed"]},
           conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Professional conduct review failed"]},
-          fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Fraud risk assessment failed"]}
+          fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Fraud risk assessment failed"]},
+          esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis failed"]}
         },
         recommendations: ["Retry analysis later", "Consider manual expert review"],
         detailedFeedback: `Analysis of ${fileName} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
@@ -338,7 +344,8 @@ Analyze the report: "${fileName}" and provide:
         ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 analysis service failed"]},
         evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence analysis service error"]},
         conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Conduct review service unavailable"]},
-        fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Risk assessment service error"]}
+        fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Risk assessment service error"]},
+        esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis service error"]}
       },
       recommendations: [
         "Retry the analysis in a few minutes",
