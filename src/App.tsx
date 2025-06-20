@@ -38,6 +38,8 @@ import ReportUpload from './components/ReportReviewer/ReportUpload';
 import ReportAnalysis from './components/ReportReviewer/ReportAnalysis';
 import ReportHistory from './components/ReportReviewer/ReportHistory';
 import ReportViewer from './components/ReportReviewer/ReportViewer';
+import DirectReportForm from './components/ReportReviewer/DirectReportForm';
+import DirectReportAnalysis from './components/ReportReviewer/DirectReportAnalysis';
 import OverviewPage from './components/Dashboard/OverviewPage';
 import { Toaster } from 'react-hot-toast';
 
@@ -162,6 +164,24 @@ import { Toaster } from 'react-hot-toast';
               element={
                 <ProtectedRoute>
                   <ReportViewer />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Direct Report Reviewer Routes */}
+            <Route 
+              path="/direct-report-form" 
+              element={
+                <ProtectedRoute>
+                  <DirectReportForm />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/direct-report-analysis" 
+              element={
+                <ProtectedRoute>
+                  <DirectReportAnalysis />
                 </ProtectedRoute>
               } 
             />

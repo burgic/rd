@@ -93,6 +93,11 @@ const Navbar: React.FC = () => {
                 </Link>
               </li>
               <li className="navbar-item">
+                <Link to="/direct-report-form" className="navbar-link">
+                  Direct Report Review
+                </Link>
+              </li>
+              <li className="navbar-item">
                 <Link to="/call-transcript-form" className="navbar-link">
                   Analyze Call
                 </Link>
@@ -114,6 +119,11 @@ const Navbar: React.FC = () => {
               <li className="navbar-item">
                 <Link to="/report-upload" className="navbar-link">
                   Report Reviewer
+                </Link>
+              </li>
+              <li className="navbar-item">
+                <Link to="/direct-report-form" className="navbar-link">
+                  Direct Report Review
                 </Link>
               </li>
               <li className="navbar-item">

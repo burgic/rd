@@ -33,16 +33,16 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { userId, reportContent, fileName, reportType, documentId } = JSON.parse(event.body);
+    const { userId, reportContent, reportTitle, reportType } = JSON.parse(event.body);
 
-    console.log('Report review request:', { userId, fileName, reportType, hasContent: !!reportContent });
+    console.log('Direct Report Review request:', { userId, reportTitle, reportType, hasContent: !!reportContent });
 
-    if (!userId || !reportContent || !fileName) {
+    if (!userId || !reportContent || !reportTitle) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Missing required fields: userId, reportContent, fileName' 
+          error: 'Missing required fields: userId, reportContent, reportTitle' 
         }),
       };
     }
@@ -57,22 +57,22 @@ exports.handler = async (event) => {
       .trim();
 
     // Validate cleaned content
-    if (cleanedContent.length < 50) {
+    if (cleanedContent.length < 100) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Document content appears to be invalid or too short. Please ensure the file contains readable text.' 
+          error: 'Report content appears to be too short. Please ensure the report contains sufficient detail for analysis.' 
         }),
       };
     }
 
-    console.log('Cleaned content length:', cleanedContent.length, 'Original length:', reportContent.length);
+    console.log('Content length:', cleanedContent.length);
 
     // Truncate very long content to prevent timeouts
     let processedContent = cleanedContent;
-    if (cleanedContent.length > 20000) {
-      processedContent = cleanedContent.substring(0, 20000) + '\n\n[Document truncated for analysis due to length]';
+    if (cleanedContent.length > 15000) {
+      processedContent = cleanedContent.substring(0, 15000) + '\n\n[Report truncated for analysis due to length]';
       console.log('Content truncated from', cleanedContent.length, 'to', processedContent.length, 'characters');
     }
 
@@ -99,35 +99,17 @@ exports.handler = async (event) => {
       rateLimitMap.set(userId, { lastRequest: now, requestCount: 1 });
     }
 
-    // Analyze the report using OpenAI with retry logic
+    // Generate report analysis using OpenAI
     console.log('Starting OpenAI analysis...');
-    let analysis;
-    let retryCount = 0;
-    const maxRetries = 2;
-    
-    while (retryCount <= maxRetries) {
-      try {
-        analysis = await analyzeReport(processedContent, fileName, reportType, retryCount);
-        console.log('OpenAI analysis completed, overall score:', analysis.overallScore);
-        break; // Success, exit retry loop
-      } catch (error) {
-        if (error.message.includes('timeout') && retryCount < maxRetries) {
-          retryCount++;
-          console.log(`OpenAI timeout, retrying... (attempt ${retryCount + 1}/${maxRetries + 1})`);
-          continue;
-        } else {
-          // If it's not a timeout or we've exhausted retries, throw the error
-          throw error;
-        }
-      }
-    }
+    const analysis = await analyzeReportDirect(processedContent, reportTitle, reportType || 'rd_report');
+    console.log('Analysis completed, overall score:', analysis.overallScore);
 
     // Prepare the database record
     const dbRecord = {
       user_id: userId,
-      file_name: fileName,
+      file_name: reportTitle,
       report_type: reportType || 'rd_report',
-              content_preview: processedContent.substring(0, 500) + (processedContent.length > 500 ? '...' : ''),
+      content_preview: processedContent.substring(0, 500) + (processedContent.length > 500 ? '...' : ''),
       overall_score: analysis.overallScore,
       compliance_score: analysis.complianceScore,
       strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
@@ -135,11 +117,12 @@ exports.handler = async (event) => {
       hmrc_compliance: analysis.checklistFeedback || {},
       recommendations: analysis.recommendations || [],
       detailed_feedback: analysis.detailedFeedback,
-      document_id: documentId || null, // Include document_id (column should now exist after migration)
+      document_id: null, // Direct input doesn't have a document_id
       created_at: new Date().toISOString()
     };
 
     // Save the analysis to database
+    console.log('Saving analysis to database...');
     const { data: savedAnalysis, error: saveError } = await supabase
       .from('report_reviews')
       .insert(dbRecord)
@@ -155,6 +138,8 @@ exports.handler = async (event) => {
         hint: saveError.hint
       });
       // Continue without saving if database fails
+    } else {
+      console.log('Analysis saved successfully with ID:', savedAnalysis.id);
     }
 
     return {
@@ -168,7 +153,7 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error('Error processing report review:', error);
+    console.error('Error processing direct report review:', error);
     return {
       statusCode: 500,
       headers,
@@ -179,11 +164,11 @@ exports.handler = async (event) => {
   }
 };
 
-async function analyzeReport(reportContent, fileName, reportType) {
-  console.log('analyzeReport called with content length:', reportContent.length);
+async function analyzeReportDirect(reportContent, reportTitle, reportType) {
+  console.log('analyzeReportDirect called with content length:', reportContent.length);
   try {
     const systemPrompt = 
-    `You are an expert R&D tax-credits advisor specialising in HMRC compliance review. Your task is to analyse R&D reports and technical documentation against HMRC’s strict criteria.
+    `You are an expert R&D tax-credits advisor specialising in HMRC compliance review. Your task is to analyse R&D reports and technical documentation against HMRC's strict criteria.
 
 **HMRC R&D REPORT REVIEW CHECKLIST**
 
@@ -230,12 +215,13 @@ async function analyzeReport(reportContent, fileName, reportType) {
     • Narrative demonstrates awareness of recent cases (e.g. Flame Tree, H&H Scaffolding, Get Onbord, Tills Plus) and shows how pitfalls were avoided
 
 14. **What hasn't been thought of**
-    • As an expert R&D tax professional you delight in finding the esoteric, unexpected and highly nuanced. 
+    • As an expert R&D tax professional you delight in finding the esoteric, unexpected, obscure and highly nuanced. 
+    • Review the report, consider against what else you know and have found, similarities with others, different approaches and ways of thinking and make these suggestions.
 
 
 
 **ANALYSIS REQUIREMENTS**
-Analyze the report: "${fileName}" and provide:
+Analyze the report: "${reportTitle}" and provide:
 
 1. **Overall Assessment** (0-100 score)
 2. **HMRC Compliance Score** (0-100)
@@ -286,7 +272,7 @@ Analyze the report: "${fileName}" and provide:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         messages: [
           {
             role: "system",
@@ -297,7 +283,7 @@ Analyze the report: "${fileName}" and provide:
             content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
           }
         ],
-        max_tokens: 2000,
+        max_tokens: 1800,
         temperature: 0.3,
         response_format: { type: "json_object" }
       }),
@@ -344,21 +330,21 @@ Analyze the report: "${fileName}" and provide:
         complianceScore: 40,
         checklistFeedback: {
           advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Unable to analyze - technical error"]},
-          uncertainty: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Analysis unavailable"]},
-          professionals: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Cannot assess competency"]},
+          uncertainty: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Analysis unavailable"]},
+          professionals: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Cannot assess competency"]},
           process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis failed"]},
           aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment check failed"]},
-          costs: {"score": 50, "strengths": ["File received"], "weaknesses": ["Cost analysis unavailable"]},
-          payeCap: {"score": 50, "strengths": ["Report uploaded"], "weaknesses": ["PAYE cap check failed"]},
+          costs: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Cost analysis unavailable"]},
+          payeCap: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["PAYE cap check failed"]},
           grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant treatment analysis failed"]},
-          ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 consistency check failed"]},
+          ct600: {"score": 50, "strengths": ["Content accepted"], "weaknesses": ["CT600 consistency check failed"]},
           evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence assessment failed"]},
-          conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Professional conduct review failed"]},
-          fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Fraud risk assessment failed"]},
+          conduct: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Professional conduct review failed"]},
+          fraudTribunal: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Fraud risk assessment failed"]},
           esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis failed"]}
         },
         recommendations: ["Retry analysis later", "Consider manual expert review"],
-        detailedFeedback: `Analysis of ${fileName} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
+        detailedFeedback: `Analysis of ${reportTitle} could not be completed due to technical issues. Please try again later or consult with an R&D tax specialist for manual review.`
       };
     }
 
@@ -371,17 +357,17 @@ Analyze the report: "${fileName}" and provide:
       complianceScore: 40,
       checklistFeedback: {
         advance: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Service error - unable to analyze"]},
-        uncertainty: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Analysis service unavailable"]},
-        professionals: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Cannot assess competency - service error"]},
+        uncertainty: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Analysis service unavailable"]},
+        professionals: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Cannot assess competency - service error"]},
         process: {"score": 50, "strengths": ["Report submitted"], "weaknesses": ["Process analysis service failed"]},
         aifAlignment: {"score": 50, "strengths": ["Document accepted"], "weaknesses": ["AIF alignment service unavailable"]},
-        costs: {"score": 50, "strengths": ["File received"], "weaknesses": ["Cost analysis service error"]},
-        payeCap: {"score": 50, "strengths": ["Report uploaded"], "weaknesses": ["PAYE cap service unavailable"]},
+        costs: {"score": 50, "strengths": ["Content received"], "weaknesses": ["Cost analysis service error"]},
+        payeCap: {"score": 50, "strengths": ["Report provided"], "weaknesses": ["PAYE cap service unavailable"]},
         grants: {"score": 50, "strengths": ["Document processed"], "weaknesses": ["Grant analysis service error"]},
-        ct600: {"score": 50, "strengths": ["File accepted"], "weaknesses": ["CT600 analysis service failed"]},
+        ct600: {"score": 50, "strengths": ["Content accepted"], "weaknesses": ["CT600 analysis service failed"]},
         evidence: {"score": 50, "strengths": ["Report received"], "weaknesses": ["Evidence analysis service error"]},
-        conduct: {"score": 50, "strengths": ["Document uploaded"], "weaknesses": ["Conduct review service unavailable"]},
-        fraudTribunal: {"score": 50, "strengths": ["File processed"], "weaknesses": ["Risk assessment service error"]},
+        conduct: {"score": 50, "strengths": ["Document provided"], "weaknesses": ["Conduct review service unavailable"]},
+        fraudTribunal: {"score": 50, "strengths": ["Content processed"], "weaknesses": ["Risk assessment service error"]},
         esoteric: {"score": 50, "strengths": ["Document received"], "weaknesses": ["Esoteric analysis service error"]}
       },
       recommendations: [
@@ -389,7 +375,7 @@ Analyze the report: "${fileName}" and provide:
         "Ensure the report contains technical R&D content",
         "Consider manual review by R&D tax specialist"
       ],
-      detailedFeedback: `Unable to complete automated analysis of ${fileName} at this time. The report has been received but our AI analysis service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for manual review.`
+      detailedFeedback: `Unable to complete automated analysis of ${reportTitle} at this time. The report has been received but our AI analysis service is temporarily unavailable. Please try again later or contact a qualified R&D tax advisor for manual review.`
     };
   }
 } 
