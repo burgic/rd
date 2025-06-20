@@ -46,6 +46,8 @@ const DirectReportAnalysis: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const requestMadeRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -91,57 +93,75 @@ const DirectReportAnalysis: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Create abort controller for this request
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      // Call the direct report reviewer function
-      console.log('Sending direct report analysis request with userId:', user?.id);
-      const response = await fetch('/.netlify/functions/report-reviewer-direct', {
+      const response = await fetch('/.netlify/functions/report-reviewer-direct-background', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.id,
           reportContent: reportData.reportContent,
           reportTitle: reportData.reportTitle,
           reportType: reportData.reportType
         }),
-        signal: abortController.signal, // Add abort signal
+        signal: abortController.signal
       });
 
-      // Check if request was aborted
-      if (abortController.signal.aborted) {
-        console.log('Request was aborted');
-        return;
-      }
+      if (abortController.signal.aborted) return;
 
       if (!response.ok) {
         const errorData = await response.json();
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please wait a minute before submitting another report.');
-        }
-        throw new Error(errorData.error || 'Failed to analyze report');
+        if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a minute.');
+        throw new Error(errorData.error || 'Failed to initiate analysis');
       }
 
       const data = await response.json();
-      setResult(data.analysis);
-      setReviewId(data.reviewId);
-
-    } catch (error: any) {
-      // Don't show errors for aborted requests
-      if (error.name === 'AbortError') {
-        console.log('Request was aborted');
-        return;
+      if (response.status === 202 && data.status === 'processing') {
+        setReviewId(data.reviewId);
+        setIsProcessing(true);
+        startPolling(data.reviewId);
+      } else {
+        setResult(data.analysis);
+        setReviewId(data.reviewId);
+        setLoading(false);
       }
-      
-      console.error('Direct Report Analysis error:', error);
-      setError(error.message || 'Failed to analyze report. Please try again.');
-      requestMadeRef.current = false; // Reset flag on error to allow retry
-    } finally {
+    } catch (error: any) {
+      if (error.name === 'AbortError') return;
+      setError(error.message || 'Failed to initiate analysis');
       setLoading(false);
-      abortControllerRef.current = null; // Clear abort controller reference
+      requestMadeRef.current = false;
+    }
+  };
+
+  const startPolling = (reviewId: string) => {
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/.netlify/functions/check-review-status?reviewId=${reviewId}`);
+        if (!response.ok) throw new Error('Failed to check status');
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+          setResult(data.analysis);
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        } else if (data.status === 'error') {
+          setError(data.message || 'Analysis failed');
+          setIsProcessing(false);
+          stopPolling();
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
   };
 
@@ -183,21 +203,18 @@ const DirectReportAnalysis: React.FC = () => {
     esoteric: 'Esoteric Analysis'
   };
 
-  if (loading) {
+  if (loading || isProcessing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Analyzing Your R&D Report
+              {isProcessing ? 'Processing Your Report' : 'Initiating Analysis'}
             </h2>
             <p className="text-gray-600">
-              Our AI is reviewing your report against HMRC's 14-point compliance criteria...
+              {isProcessing ? 'Our AI is analyzing your report. This may take up to 30 seconds.' : 'Preparing your report for analysis...'}
             </p>
-            <div className="mt-4 text-sm text-purple-600">
-              This may take up to 30 seconds
-            </div>
           </div>
         </div>
       </div>
@@ -216,23 +233,16 @@ const DirectReportAnalysis: React.FC = () => {
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Analysis Failed</h2>
             <p className="text-gray-600 mb-6">{error}</p>
-            <div className="space-y-3">
-              {error?.includes('Rate limit') ? (
-                <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-                  Please wait a minute before trying again. This helps us maintain service quality for all users.
-                </div>
-              ) : null}
-              <button
-                onClick={() => {
-                  requestMadeRef.current = false;
-                  setError(null);
-                  navigate('/direct-report-form');
-                }}
-                className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
-              >
-                Try Again
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                requestMadeRef.current = false;
+                setError(null);
+                navigate('/direct-report-form');
+              }}
+              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       </div>
@@ -245,7 +255,6 @@ const DirectReportAnalysis: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8 py-6">
             <h1 className="text-3xl font-bold text-white">R&D Report Analysis</h1>
             <p className="text-purple-100 mt-2">HMRC Compliance Review for "{reportData.reportTitle}"</p>
@@ -256,8 +265,6 @@ const DirectReportAnalysis: React.FC = () => {
               Analysis completed • {reviewId && `Review ID: ${reviewId}`}
             </div>
           </div>
-
-          {/* Overall Scores */}
           <div className="p-8 border-b">
             <div className="grid md:grid-cols-2 gap-6">
               <div className={`p-6 rounded-lg border ${getScoreBg(result.overallScore)}`}>
@@ -271,7 +278,6 @@ const DirectReportAnalysis: React.FC = () => {
                    result.overallScore >= 40 ? 'Fair - requires attention' : 'Poor - significant issues'}
                 </p>
               </div>
-              
               <div className={`p-6 rounded-lg border ${getScoreBg(result.complianceScore)}`}>
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">HMRC Compliance</h2>
                 <div className={`text-4xl font-bold ${getScoreColor(result.complianceScore)} mb-2`}>
@@ -285,8 +291,6 @@ const DirectReportAnalysis: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Detailed Checklist Results */}
           <div className="p-8 border-b">
             <h3 className="text-2xl font-semibold text-gray-900 mb-6">14-Point HMRC Compliance Checklist</h3>
             <div className="grid lg:grid-cols-2 gap-6">
@@ -298,48 +302,42 @@ const DirectReportAnalysis: React.FC = () => {
                       {item.score}/100
                     </span>
                   </div>
-                  
-                                     {item.strengths && item.strengths.length > 0 && (
-                     <div className="mb-3">
-                       <h5 className="text-sm font-medium text-green-700 mb-1">✅ Strengths:</h5>
-                       <ul className="text-sm text-green-600 space-y-1">
-                         {item.strengths.map((strength: string, idx: number) => (
-                           <li key={idx}>• {strength}</li>
-                         ))}
-                       </ul>
-                     </div>
-                   )}
-                   
-                   {item.weaknesses && item.weaknesses.length > 0 && (
-                     <div>
-                       <h5 className="text-sm font-medium text-red-700 mb-1">⚠️ Areas for Improvement:</h5>
-                       <ul className="text-sm text-red-600 space-y-1">
-                         {item.weaknesses.map((weakness: string, idx: number) => (
-                           <li key={idx}>• {weakness}</li>
-                         ))}
-                       </ul>
-                     </div>
-                   )}
+                  {item.strengths?.length > 0 && (
+                    <div className="mb-3">
+                      <h5 className="text-sm font-medium text-green-700 mb-1">✅ Strengths:</h5>
+                      <ul className="text-sm text-green-600 space-y-1">
+                        {item.strengths.map((strength: string, idx: number) => (
+                          <li key={idx}>• {strength}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {item.weaknesses?.length > 0 && (
+                    <div>
+                      <h5 className="text-sm font-medium text-red-700 mb-1">⚠️ Areas for Improvement:</h5>
+                      <ul className="text-sm text-red-600 space-y-1">
+                        {item.weaknesses.map((weakness: string, idx: number) => (
+                          <li key={idx}>• {weakness}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Detailed Feedback */}
           <div className="p-8 border-b">
             <h3 className="text-2xl font-semibold text-gray-900 mb-4">Detailed Analysis</h3>
             <div className="bg-gray-50 rounded-lg p-6">
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{result.detailedFeedback}</p>
             </div>
           </div>
-
-          {/* Recommendations */}
-          {result.recommendations && result.recommendations.length > 0 && (
+          {result.recommendations?.length > 0 && (
             <div className="p-8 border-b">
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">Actionable Recommendations</h3>
               <div className="bg-blue-50 rounded-lg p-6">
                 <ul className="space-y-3">
-                                     {result.recommendations.map((rec: string, index: number) => (
+                  {result.recommendations.map((rec: string, index: number) => (
                     <li key={index} className="flex items-start">
                       <span className="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">
                         {index + 1}
@@ -351,8 +349,6 @@ const DirectReportAnalysis: React.FC = () => {
               </div>
             </div>
           )}
-
-          {/* Actions */}
           <div className="bg-gray-50 px-8 py-6 flex flex-col sm:flex-row gap-4">
             <button
               onClick={handleNewAnalysis}
@@ -368,8 +364,6 @@ const DirectReportAnalysis: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Professional Disclaimer */}
         <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
           <div className="flex items-start">
             <div className="text-yellow-600 mr-3">
@@ -392,4 +386,4 @@ const DirectReportAnalysis: React.FC = () => {
   );
 };
 
-export default DirectReportAnalysis; 
+export default DirectReportAnalysis;
