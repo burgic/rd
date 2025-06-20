@@ -89,8 +89,26 @@ const ReportUploadWithStorage: React.FC<ReportUploadProps> = () => {
           const arrayBuffer = e.target?.result as ArrayBuffer;
           // Basic text extraction from Word files (this is simplified)
           // In production, you'd want to use a library like mammoth.js
-          const text = new TextDecoder().decode(arrayBuffer);
-          resolve(text);
+          try {
+            const text = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
+            // Clean the extracted text to remove binary artifacts
+            const cleanedText = text
+              .replace(/\u0000/g, '') // Remove null bytes
+              .replace(/[\u0001-\u001F\u007F-\u009F]/g, ' ') // Replace control characters
+              .replace(/\uFFFD/g, '') // Remove replacement characters
+              .replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, ' ') // Replace non-printable characters
+              .replace(/\s+/g, ' ') // Normalize whitespace
+              .trim();
+            
+            if (cleanedText.length < 50) {
+              reject(new Error('Could not extract readable text from document. Please try converting to a text file or check if the document contains text content.'));
+            } else {
+              resolve(cleanedText);
+            }
+          } catch (decodeError) {
+            console.error('Text extraction error:', decodeError);
+            reject(new Error('Failed to extract text from Word document. Please try converting to a text file.'));
+          }
         };
         reader.onerror = () => reject(new Error('Failed to read Word document'));
         reader.readAsArrayBuffer(file);

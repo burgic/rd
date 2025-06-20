@@ -47,6 +47,28 @@ exports.handler = async (event) => {
       };
     }
 
+    // Clean the report content of any invalid Unicode characters
+    const cleanedContent = reportContent
+      .replace(/\u0000/g, '') // Remove null bytes
+      .replace(/[\u0001-\u001F\u007F-\u009F]/g, ' ') // Replace control characters with spaces
+      .replace(/\uFFFD/g, '') // Remove replacement characters
+      .replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, ' ') // Replace non-printable characters
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+
+    // Validate cleaned content
+    if (cleanedContent.length < 50) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Document content appears to be invalid or too short. Please ensure the file contains readable text.' 
+        }),
+      };
+    }
+
+    console.log('Cleaned content length:', cleanedContent.length, 'Original length:', reportContent.length);
+
     // Rate limiting - 5 reports per minute
     const now = Date.now();
     if (rateLimitMap.has(userId)) {
@@ -71,14 +93,14 @@ exports.handler = async (event) => {
     }
 
     // Analyze the report using OpenAI
-    const analysis = await analyzeReport(reportContent, fileName, reportType);
+    const analysis = await analyzeReport(cleanedContent, fileName, reportType);
 
     // Prepare the database record
     const dbRecord = {
       user_id: userId,
       file_name: fileName,
       report_type: reportType || 'rd_report',
-      content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
+              content_preview: cleanedContent.substring(0, 500) + (cleanedContent.length > 500 ? '...' : ''),
       overall_score: analysis.overallScore,
       compliance_score: analysis.complianceScore,
       strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
