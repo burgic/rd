@@ -73,24 +73,27 @@ exports.handler = async (event) => {
     // Analyze the report using OpenAI
     const analysis = await analyzeReport(reportContent, fileName, reportType);
 
+    // Prepare the database record
+    const dbRecord = {
+      user_id: userId,
+      file_name: fileName,
+      report_type: reportType || 'rd_report',
+      content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
+      overall_score: analysis.overallScore,
+      compliance_score: analysis.complianceScore,
+      strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
+      improvements: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].weaknesses).flat()) : JSON.stringify([]),
+      hmrc_compliance: analysis.checklistFeedback || {},
+      recommendations: analysis.recommendations || [],
+      detailed_feedback: analysis.detailedFeedback,
+      document_id: documentId || null, // Include document_id (column should now exist after migration)
+      created_at: new Date().toISOString()
+    };
+
     // Save the analysis to database
     const { data: savedAnalysis, error: saveError } = await supabase
       .from('report_reviews')
-      .insert({
-        user_id: userId,
-        file_name: fileName,
-        report_type: reportType || 'rd_report',
-        content_preview: reportContent.substring(0, 500) + (reportContent.length > 500 ? '...' : ''),
-        overall_score: analysis.overallScore,
-        compliance_score: analysis.complianceScore,
-        strengths: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].strengths).flat()) : JSON.stringify([]),
-        improvements: analysis.checklistFeedback ? JSON.stringify(Object.keys(analysis.checklistFeedback).map(key => analysis.checklistFeedback[key].weaknesses).flat()) : JSON.stringify([]),
-        hmrc_compliance: analysis.checklistFeedback || {},
-        recommendations: analysis.recommendations || [],
-        detailed_feedback: analysis.detailedFeedback,
-        document_id: documentId || null, // Link to document if provided
-        created_at: new Date().toISOString()
-      })
+      .insert(dbRecord)
       .select()
       .single();
 
@@ -227,7 +230,7 @@ Analyze the report: "${fileName}" and provide:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4.1-mini',
         messages: [
           {
             role: "system",
@@ -238,7 +241,7 @@ Analyze the report: "${fileName}" and provide:
             content: `Please analyze this R&D report content and respond ONLY with valid JSON following the exact format specified in the system prompt. Do not include any explanatory text outside the JSON structure:\n\n${reportContent}`
           }
         ],
-        max_tokens: 2500,
+        max_tokens: 1500,
         temperature: 0.3,
         response_format: { type: "json_object" }
       }),
@@ -247,6 +250,13 @@ Analyze the report: "${fileName}" and provide:
     if (!response.ok) {
       const errorData = await response.json();
       console.error('OpenAI API error:', errorData);
+      
+      // Handle rate limit specifically
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after') || '15';
+        throw new Error(`Rate limit exceeded. Please wait ${retryAfter} seconds before trying again.`);
+      }
+      
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
